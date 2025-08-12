@@ -8,6 +8,3 @@
 # OS/editor
 .DS_Store
 Thumbs.db
-
-# Build output
-/add-in/*.xlam
