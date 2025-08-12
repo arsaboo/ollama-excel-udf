@@ -12,6 +12,28 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 
 ---
 
+## Examples
+
+### 1. Get Capitals
+
+![Capitals Example](assets/Capitals.gif)
+
+*Using:*
+```excel
+=AI("What is the capital of USA?")
+```
+
+### 2. Calculate Percentages
+
+![Percentages Example](assets/Percentages.gif)
+
+*Using:*
+```excel
+=AI("calculate 5% of "&A1)
+```
+
+---
+
 ## Quick Install
 
 1. **Locate the add-in file:**
