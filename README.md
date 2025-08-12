@@ -14,14 +14,14 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 
 ## Quick Install
 
-1. **Download the latest Release asset:**  
-   [OllamaLLM.xlam](https://github.com/arsaboo/ollama-excel-udf/releases) (see Releases on this repo).
+1. **Locate the add-in file:**
+   Use the provided `OllamaLLM.xlam` file in the `/add-in` folder of this repository.
 
-2. **In Excel:**  
-   `File → Options → Add-ins → Manage: Excel Add-ins → Go… → Browse…`  
-   Pick `OllamaLLM.xlam` and ensure it’s checked.
+2. **In Excel:**
+   `File → Options → Add-ins → Manage: Excel Add-ins → Go… → Browse…`
+   Pick `OllamaLLM.xlam` from the `/add-in` folder and ensure it’s checked.
 
-3. **(For Developers Only):**  
+3. **(For Developers Only):**
    If building from source: enable `Tools → References → Microsoft Scripting Runtime` in the VBA editor.
 
 ---
@@ -34,7 +34,7 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 =AI("What is the capital of USA?")
 ```
 
-**Output:**  
+**Output:**
 `Washington, D.C.`
 
 ---
@@ -59,25 +59,25 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 
 ## Parameters
 
-- **`prompt`** (required):  
+- **`prompt`** (required):
   Your question/instruction (plain text).
 
-- **`model`** (optional, default: `qwen3:30b-a3b-instruct-2507-q8_0`):  
+- **`model`** (optional, default: `qwen3:30b-a3b-instruct-2507-q8_0`):
   Must exist on the Ollama server (`ollama list`).
 
-- **`temperature`** (optional, default: `0.2`):  
+- **`temperature`** (optional, default: `0.2`):
   `0.0–1.0`; lower = more deterministic (best for spreadsheets).
 
-- **`max_tokens`** (optional, default: `512`):  
+- **`max_tokens`** (optional, default: `512`):
   Upper bound on response length.
 
-- **`system`** (optional):  
+- **`system`** (optional):
   System prompt; default forces concise, single-value answers for Excel cells.
 
-- **`endpoint`** (optional, default: `http://192.168.2.162:11434/v1/chat/completions`):  
+- **`endpoint`** (optional, default: `http://192.168.2.162:11434/v1/chat/completions`):
   Full API URL or just `scheme://host:port`.
 
-> **Note:**  
+> **Note:**
 > Excel shows function help in the Function Arguments (`fx`) dialog, not inline while typing.
 
 ---
@@ -85,9 +85,10 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 ## Requirements
 
 - **Excel for Windows** (uses WinHTTP).
-- Reachable **Ollama server** (default: `http://192.168.2.162:11434`).  
+  *This add-in has only been tested on Windows.*
+- Reachable **Ollama server** (default: `http://192.168.2.162:11434`).
   If remote, start server with `OLLAMA_HOST=0.0.0.0` and open TCP 11434.
-- **Model pulled:**  
+- **Model pulled:**
   ```sh
   ollama pull qwen3:30b-a3b-instruct-2507-q8_0
   ```
