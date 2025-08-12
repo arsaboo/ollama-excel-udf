@@ -1,90 +1,125 @@
-Ollama Excel UDF — AI()
+# Ollama Excel UDF — `AI()`
 
-An Excel add-in (.xlam) that calls a local/remote Ollama server using the OpenAI-compatible /v1/chat/completions endpoint and returns short, cell-friendly answers.
+An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the OpenAI-compatible `/v1/chat/completions` endpoint and returns short, cell-friendly answers.
 
-Formula:
+---
 
+## Formula
+
+```excel
 =AI(prompt, [model], [temperature], [max_tokens], [system], [endpoint])
+```
 
-Quick Install
+---
 
-Download the latest Release asset: OllamaLLM.xlam (see Releases on this repo).
+## Quick Install
 
-In Excel: File → Options → Add-ins → Manage: Excel Add-ins → Go… → Browse…Pick OllamaLLM.xlam and ensure it’s checked.
+1. **Download the latest Release asset:**  
+   [OllamaLLM.xlam](https://github.com/arsaboo/ollama-excel-udf/releases) (see Releases on this repo).
 
-(Dev only) If building from source: enable Tools → References → Microsoft Scripting Runtime in the VBA editor.
+2. **In Excel:**  
+   `File → Options → Add-ins → Manage: Excel Add-ins → Go… → Browse…`  
+   Pick `OllamaLLM.xlam` and ensure it’s checked.
 
-Usage
+3. **(For Developers Only):**  
+   If building from source: enable `Tools → References → Microsoft Scripting Runtime` in the VBA editor.
 
-Basic
+---
 
+## Usage
+
+### Basic
+
+```excel
 =AI("What is the capital of USA?")
+```
 
-Output: Washington, D.C.
+**Output:**  
+`Washington, D.C.`
 
-Change model
+---
 
+### Change Model
+
+```excel
 =AI("Explain CAGR in one sentence","llama3.1:8b")
+```
 
-Change endpoint
+---
 
+### Change Endpoint
+
+```excel
 =AI("ping","qwen3:30b-a3b-instruct-2507-q8_0",0.2,128,"","http://192.168.2.50:11434")
+```
 
-(Host-only is fine; /v1/chat/completions is auto-appended.)
+*(Host-only is fine; `/v1/chat/completions` is auto-appended.)*
 
-Parameters
+---
 
-prompt (required) — Your question/instruction (plain text).
+## Parameters
 
-model (optional, default qwen3:30b-a3b-instruct-2507-q8_0) — Must exist on the Ollama server (ollama list).
+- **`prompt`** (required):  
+  Your question/instruction (plain text).
 
-temperature (optional, default 0.2) — 0.0–1.0; lower = more deterministic (best for spreadsheets).
+- **`model`** (optional, default: `qwen3:30b-a3b-instruct-2507-q8_0`):  
+  Must exist on the Ollama server (`ollama list`).
 
-max_tokens (optional, default 512) — Upper bound on response length.
+- **`temperature`** (optional, default: `0.2`):  
+  `0.0–1.0`; lower = more deterministic (best for spreadsheets).
 
-system (optional) — System prompt; default forces concise, single-value answers for Excel cells.
+- **`max_tokens`** (optional, default: `512`):  
+  Upper bound on response length.
 
-endpoint (optional, default http://192.168.2.162:11434/v1/chat/completions) — Full API URL or just scheme://host:port.
+- **`system`** (optional):  
+  System prompt; default forces concise, single-value answers for Excel cells.
 
-Excel shows function help in the Function Arguments (fx) dialog, not inline while typing.
+- **`endpoint`** (optional, default: `http://192.168.2.162:11434/v1/chat/completions`):  
+  Full API URL or just `scheme://host:port`.
 
-Requirements
+> **Note:**  
+> Excel shows function help in the Function Arguments (`fx`) dialog, not inline while typing.
 
-Excel for Windows (uses WinHTTP).
+---
 
-Reachable Ollama server (default http://192.168.2.162:11434).If remote, start server with OLLAMA_HOST=0.0.0.0 and open TCP 11434.
+## Requirements
 
-Model pulled: ollama pull qwen3:30b-a3b-instruct-2507-q8_0.
+- **Excel for Windows** (uses WinHTTP).
+- Reachable **Ollama server** (default: `http://192.168.2.162:11434`).  
+  If remote, start server with `OLLAMA_HOST=0.0.0.0` and open TCP 11434.
+- **Model pulled:**  
+  ```sh
+  ollama pull qwen3:30b-a3b-instruct-2507-q8_0
+  ```
 
-Build from Source
+---
 
-In Excel (Alt+F11), import files under /src:
+## Build from Source
 
-modAI_Functions.bas
+1. In Excel (`Alt+F11`), import files under `/src`:
+    - `modAI_Functions.bas`
+    - `modAI_Tooltips.bas`
+    - `JsonConverter.bas` (from [VBA-JSON](https://github.com/VBA-tools/VBA-JSON))
+2. Enable **Microsoft Scripting Runtime** in VBA editor.
+3. Save as `.xlam` under `/add-in/OllamaLLM.xlam`.
+4. Re-open Excel. The add-in auto-registers UDF tooltips.
 
-modAI_Tooltips.bas
+---
 
-JsonConverter.bas (from VBA-JSON)
+## Security Notes
 
-Enable Microsoft Scripting Runtime in VBA editor.
+- This add-in talks directly to your Ollama host; **no API key is used**.
+- If exposing beyond LAN, **protect the host** (firewall, reverse proxy, auth).
+- Consider **signing the add-in** with `SelfCert.exe` to reduce macro warnings.
 
-Save as .xlam under /add-in/OllamaLLM.xlam.
+---
 
-Re-open Excel. The add-in auto-registers UDF tooltips.
+## Credits
 
-Security Notes
+- JSON parsing via [VBA-JSON](https://github.com/VBA-tools/VBA-JSON) (MIT) by Tim Hall.
 
-This add-in talks directly to your Ollama host; no API key is used.
+---
 
-If exposing beyond LAN, protect the host (firewall, reverse proxy, auth).
+## License
 
-Consider signing the add-in with SelfCert.exe to reduce macro warnings.
-
-Credits
-
-JSON parsing via VBA-JSON (MIT) by Tim Hall.
-
-License
-
-MIT — see LICENSE.
-
+MIT — see [LICENSE](LICENSE).
