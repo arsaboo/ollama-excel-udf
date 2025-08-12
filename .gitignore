@@ -1,5 +1,13 @@
-# Object file
-*.o
+# Excel artifacts
+*.xlk
+~$*.xls*
+*.tmp
+*.bak
+*.lock
 
-# Ada Library Information
-*.ali
+# OS/editor
+.DS_Store
+Thumbs.db
+
+# Build output
+/add-in/*.xlam
