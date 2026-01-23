@@ -39,8 +39,6 @@ Public Function AI(prompt As String, _
                    Optional max_tokens As Variant, _
                    Optional endpoint As String = "", _
                    Optional api_key As String = "") As String
-Attribute AI.VB_Description = "Send a prompt to your Ollama server and return a short, Excel-friendly answer."
-Attribute AI.VB_ProcData.VB_Invoke_Func = " \n20"
     Dim http As Object
     Dim status As Long
     Dim body As String
@@ -48,6 +46,7 @@ Attribute AI.VB_ProcData.VB_Invoke_Func = " \n20"
     Dim json As Object
     Dim content As String
     Dim url As String
+    Dim system As String
 
     EnsureIniDefaults
 
@@ -111,8 +110,6 @@ Public Function AI_SEARCH(prompt As String, _
                           Optional max_tokens As Variant, _
                           Optional endpoint As String = "", _
                           Optional api_key As String = "") As String
-Attribute AI_SEARCH.VB_Description = "Send a prompt to your search-enabled AI provider and return a short, Excel-friendly answer."
-Attribute AI_SEARCH.VB_ProcData.VB_Invoke_Func = " \n20"
     Dim http As Object
     Dim status As Long
     Dim body As String
@@ -120,6 +117,7 @@ Attribute AI_SEARCH.VB_ProcData.VB_Invoke_Func = " \n20"
     Dim json As Object
     Dim content As String
     Dim url As String
+    Dim system As String
 
     EnsureIniDefaults
 
@@ -178,8 +176,6 @@ FailSoft:
 End Function
 
 Public Function AI_Version() As String
-Attribute AI_Version.VB_Description = "Return the installed add-in version string."
-Attribute AI_Version.VB_ProcData.VB_Invoke_Func = " \n20"
     AI_Version = "2026-01-23.1"
 End Function
 
@@ -217,25 +213,30 @@ Private Function BuildChatPayload(prompt As String, _
     BuildChatPayload = JsonConverter.ConvertToJson(root, Whitespace:=0)
 End Function
 
-' Accepts host-only or full path; appends /v1/chat/completions if needed
+' Accepts host-only or full path; appends /chat/completions or /v1/chat/completions if needed
 Private Function NormalizeEndpoint(ByVal e As String) As String
     Dim s As String
     s = Trim(e)
     If Len(s) = 0 Then
         s = "http://127.0.0.1:11434/v1/chat/completions"
     End If
-    ' If it ends with /api/chat or /v1/chat/completions, leave as is
-    If Right$(s, 14) = "/api/chat" Or Right$(s, 21) = "/v1/chat/completions" Then
+    ' If it ends with /api/chat, /v1/chat/completions, or /chat/completions, leave as is
+    If Right$(s, 14) = "/api/chat" Or Right$(s, 21) = "/v1/chat/completions" Or Right$(s, 18) = "/chat/completions" Then
         NormalizeEndpoint = s
         Exit Function
     End If
     ' If it looks like just scheme://host[:port] or with trailing slash, append path
     If InStr(1, s, "/v1/chat/completions", vbTextCompare) = 0 And _
-       InStr(1, s, "/api/chat", vbTextCompare) = 0 Then
+       InStr(1, s, "/api/chat", vbTextCompare) = 0 And _
+       InStr(1, s, "/chat/completions", vbTextCompare) = 0 Then
         If Right$(s, 1) = "/" Then
             s = Left$(s, Len(s) - 1)
         End If
-        s = s & "/v1/chat/completions"
+        If InStr(1, s, "perplexity.ai", vbTextCompare) > 0 Then
+            s = s & "/chat/completions"
+        Else
+            s = s & "/v1/chat/completions"
+        End If
     End If
     NormalizeEndpoint = s
 End Function
