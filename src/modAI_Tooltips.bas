@@ -16,6 +16,9 @@ Public Sub Install_AI_Tooltips()
     If Not RegisterOne("AI") Then errs = errs & vbCrLf & " - AI"
     If Not RegisterVersion(ThisWorkbook.Name & "!AI_Version") Then errs = errs & vbCrLf & " - " & ThisWorkbook.Name & "!AI_Version"
     If Not RegisterVersion("AI_Version") Then errs = errs & vbCrLf & " - AI_Version"
+    On Error Resume Next
+    Application.Run ThisWorkbook.Name & "!AI_Notify_First_Run"
+    On Error GoTo 0
 
     On Error Resume Next
     If wasAddin Then
@@ -39,13 +42,12 @@ Private Function RegisterOne(ByVal macroName As String) As Boolean
         Category:="AI Helpers", _
         ArgumentDescriptions:=Array( _
             "prompt (required): Your question or instruction. Plain text.", _
-            "model (optional, default=qwen3:30b-a3b-instruct-2507-q8_0): Exact model on the server (see ollama list).", _
-            "temperature (optional, default=0.2): 0.0�1.0. Lower = more deterministic.", _
-            "max_tokens (optional, default=512): Maximum response length.", _
-            "system (optional): System prompt. Leave blank for concise, single-value answers.", _
-            "endpoint (optional, default=http://192.168.2.162:11434/v1/chat/completions): " & _
-                "Full API URL or just host:port; host-only will auto-append /v1/chat/completions.", _
-            "api_key (optional): API key for OpenAI-compatible services (sent as Authorization: Bearer <key>)." _
+            "model (optional): Default from INI (ai.model) or built-in default.", _
+            "temperature (optional): Default from INI (ai.temperature) or 0.2.", _
+            "max_tokens (optional): Default from INI (ai.max_tokens) or 512.", _
+            "system (optional): Default from INI (ai.system) or built-in system prompt.", _
+            "endpoint (optional): Default from INI (ai.endpoint) or built-in default.", _
+            "api_key (optional): Default from INI (ai.api_key). Sent as Authorization: Bearer <key>." _
         )
     RegisterOne = True
     Exit Function
@@ -64,5 +66,6 @@ Private Function RegisterVersion(ByVal macroName As String) As Boolean
 Fail:
     RegisterVersion = False
 End Function
+
 
 

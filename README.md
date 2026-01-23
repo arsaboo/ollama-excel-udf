@@ -87,28 +87,73 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 
 ---
 
+## Provider Quick Reference
+
+Use these values for the `model` and `endpoint` arguments (or set them in the AI Settings sheet).
+
+- **OpenAI**
+  - Endpoint: `https://api.openai.com`
+  - Models (examples): `gpt-4o-mini`, `gpt-4.1-mini`
+  - Notes: Requires API key.
+
+- **Perplexity**
+  - Endpoint: `https://api.perplexity.ai`
+  - Models (examples): `sonar-pro`, `sonar-reasoning`
+  - Notes: Requires API key.
+
+- **OpenRouter**
+  - Endpoint: `https://openrouter.ai/api`
+  - Models (examples): `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet`
+  - Notes: Requires API key; some models may require additional headers.
+
+---
+
 ## Parameters
 
 - **`prompt`** (required):
   Your question/instruction (plain text).
 
-- **`model`** (optional, default: `qwen3:30b-a3b-instruct-2507-q8_0`):
-  Must exist on the Ollama server (`ollama list`).
+- **`model`** (optional):
+  Default from INI (`ai.model`), or `qwen3:30b-a3b-instruct-2507-q8_0` if missing.
 
-- **`temperature`** (optional, default: `0.2`):
-  `0.0–1.0`; lower = more deterministic (best for spreadsheets).
+- **`temperature`** (optional):
+  Default from INI (`ai.temperature`), or `0.2` if missing.
 
-- **`max_tokens`** (optional, default: `512`):
-  Upper bound on response length.
+- **`max_tokens`** (optional):
+  Default from INI (`ai.max_tokens`), or `512` if missing.
 
 - **`system`** (optional):
-  System prompt; default forces concise, single-value answers for Excel cells.
+  Default from INI (`ai.system`), or built-in concise system prompt if missing.
 
-- **`endpoint`** (optional, default: `http://192.168.2.162:11434/v1/chat/completions`):
-  Full API URL or just `scheme://host:port`.
+- **`endpoint`** (optional):
+  Default from INI (`ai.endpoint`), or built-in default if missing.
 
 - **`api_key`** (optional):
-  API key for OpenAI-compatible services. Sent as `Authorization: Bearer <key>`.
+  Default from INI (`ai.api_key`). Sent as `Authorization: Bearer <key>`.
+
+---
+
+## Defaults via INI
+
+The add-in reads defaults from `%APPDATA%\OllamaLLM\config.ini` and auto-creates it if missing.
+
+Example:
+
+```ini
+[ai]
+model = qwen3:30b-a3b-instruct-2507-q8_0
+endpoint = https://api.perplexity.ai
+api_key = YOUR_API_KEY
+temperature = 0.2
+max_tokens = 512
+system =
+```
+
+To open the config file via macro:
+
+- Press `Alt+F8`
+- In **Macro name**, type `OllamaLLM.xlam!Open_AI_Config`
+- Click **Run**
 
 > **Note:**
 > Excel shows function help in the Function Arguments (`fx`) dialog, not inline while typing.
