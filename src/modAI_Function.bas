@@ -8,7 +8,8 @@ Public Function AI(prompt As String, _
                    Optional temperature As Double = 0.2, _
                    Optional max_tokens As Long = 512, _
                    Optional system As String = "", _
-                   Optional endpoint As String = "http://192.168.2.162:11434/v1/chat/completions") As String
+                   Optional endpoint As String = "http://192.168.2.162:11434/v1/chat/completions", _
+                   Optional api_key As String = "") As String
 Attribute AI.VB_Description = "Send a prompt to your Ollama server and return a short, Excel-friendly answer."
 Attribute AI.VB_ProcData.VB_Invoke_Func = " \n20"
     Dim http As Object
@@ -21,7 +22,7 @@ Attribute AI.VB_ProcData.VB_Invoke_Func = " \n20"
 
     If Len(system) = 0 Then
         system = "You are a helpful assistant working inside Microsoft Excel. " & _
-                 "Always return only the most concise, direct answer to the user’s question. " & _
+                 "Always return only the most concise, direct answer to the userï¿½s question. " & _
                  "Do not include explanations, context, or extra words. " & _
                  "Use plain text only (no Markdown). " & _
                  "If the answer is a single value, output only that value."
@@ -38,6 +39,9 @@ Attribute AI.VB_ProcData.VB_Invoke_Func = " \n20"
     http.Open "POST", url, False
     http.SetRequestHeader "Content-Type", "application/json"
     http.SetRequestHeader "Accept", "application/json"
+    If Len(api_key) > 0 Then
+        http.SetRequestHeader "Authorization", "Bearer " & api_key
+    End If
     http.Send payload
 
     status = http.status
@@ -62,6 +66,12 @@ Attribute AI.VB_ProcData.VB_Invoke_Func = " \n20"
 
 FailSoft:
     AI = "VBA Error #" & Err.Number & ": " & Err.Description
+End Function
+
+Public Function AI_Version() As String
+Attribute AI_Version.VB_Description = "Return the installed add-in version string."
+Attribute AI_Version.VB_ProcData.VB_Invoke_Func = " \n20"
+    AI_Version = "2026-01-23.1"
 End Function
 
 ' Build OpenAI-compatible payload (uses strongly-typed Dictionary for VBA-JSON)

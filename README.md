@@ -7,7 +7,7 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 ## Formula
 
 ```excel
-=AI(prompt, [model], [temperature], [max_tokens], [system], [endpoint])
+=AI(prompt, [model], [temperature], [max_tokens], [system], [endpoint], [api_key])
 ```
 
 ---
@@ -79,6 +79,14 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 
 ---
 
+### Perplexity (API Key)
+
+```excel
+=AI("Hello!","sonar-pro",0.2,128,"","https://api.perplexity.ai","YOUR_API_KEY")
+```
+
+---
+
 ## Parameters
 
 - **`prompt`** (required):
@@ -98,6 +106,9 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 
 - **`endpoint`** (optional, default: `http://192.168.2.162:11434/v1/chat/completions`):
   Full API URL or just `scheme://host:port`.
+
+- **`api_key`** (optional):
+  API key for OpenAI-compatible services. Sent as `Authorization: Bearer <key>`.
 
 > **Note:**
 > Excel shows function help in the Function Arguments (`fx`) dialog, not inline while typing.
