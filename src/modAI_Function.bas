@@ -37,7 +37,6 @@ Public Function AI(prompt As String, _
                    Optional model As String = "", _
                    Optional temperature As Variant, _
                    Optional max_tokens As Variant, _
-                   Optional system As String = "", _
                    Optional endpoint As String = "", _
                    Optional api_key As String = "") As String
 Attribute AI.VB_Description = "Send a prompt to your Ollama server and return a short, Excel-friendly answer."
@@ -64,17 +63,7 @@ Attribute AI.VB_ProcData.VB_Invoke_Func = " \n20"
         max_tokens = ResolveIniLong("max_tokens", 512)
     End If
 
-    If Len(system) = 0 Then
-        system = ResolveIniString(system, "system", "")
-    End If
-
-    If Len(system) = 0 Then
-        system = "You are a helpful assistant working inside Microsoft Excel. " & _
-                 "Always return only the most concise, direct answer to the user's question. " & _
-                 "Do not include explanations, context, or extra words. " & _
-                 "Use plain text only (no Markdown). " & _
-                 "If the answer is a single value, output only that value."
-    End If
+    system = ResolveIniString("", "system", DefaultSystemPrompt())
 
     url = NormalizeEndpoint(endpoint)
 
@@ -114,6 +103,78 @@ Attribute AI.VB_ProcData.VB_Invoke_Func = " \n20"
 
 FailSoft:
     AI = "VBA Error #" & Err.Number & ": " & Err.Description
+End Function
+
+Public Function AI_SEARCH(prompt As String, _
+                          Optional model As String = "", _
+                          Optional temperature As Variant, _
+                          Optional max_tokens As Variant, _
+                          Optional endpoint As String = "", _
+                          Optional api_key As String = "") As String
+Attribute AI_SEARCH.VB_Description = "Send a prompt to your search-enabled AI provider and return a short, Excel-friendly answer."
+Attribute AI_SEARCH.VB_ProcData.VB_Invoke_Func = " \n20"
+    Dim http As Object
+    Dim status As Long
+    Dim body As String
+    Dim payload As String
+    Dim json As Object
+    Dim content As String
+    Dim url As String
+
+    EnsureIniDefaults
+
+    model = ResolveIniString(model, "model", "sonar-pro", "search")
+    endpoint = ResolveIniString(endpoint, "endpoint", "https://api.perplexity.ai", "search")
+    api_key = ResolveIniString(api_key, "api_key", "", "search")
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        temperature = ResolveIniDouble("temperature", 0.2, "search")
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        max_tokens = ResolveIniLong("max_tokens", 512, "search")
+    End If
+
+    system = ResolveIniString("", "system", DefaultSystemPrompt(), "search")
+
+    url = NormalizeEndpoint(endpoint)
+
+    On Error GoTo FailSoft
+
+    payload = BuildChatPayload(prompt, model, CDbl(temperature), CLng(max_tokens), system)
+
+    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
+    http.SetTimeouts 30000, 30000, 30000, 120000
+    http.Open "POST", url, False
+    http.SetRequestHeader "Content-Type", "application/json"
+    http.SetRequestHeader "Accept", "application/json"
+    If Len(api_key) > 0 Then
+        http.SetRequestHeader "Authorization", "Bearer " & api_key
+    End If
+    http.Send payload
+
+    status = http.status
+    body = http.responseText
+
+    If status <> 200 Then
+        AI_SEARCH = "Error: HTTP " & status & " - " & http.StatusText & ". Body: " & Left$(body, 500)
+        Exit Function
+    End If
+
+    Set json = JsonConverter.ParseJson(body)
+    On Error Resume Next
+    content = json("choices")(1)("message")("content")
+    On Error GoTo FailSoft
+
+    If Len(content) = 0 Then
+        AI_SEARCH = "Error: Missing content in response. Raw: " & Left$(body, 500)
+    Else
+        AI_SEARCH = Trim(content)
+    End If
+    Exit Function
+
+FailSoft:
+    AI_SEARCH = "VBA Error #" & Err.Number & ": " & Err.Description
 End Function
 
 Public Function AI_Version() As String
@@ -179,9 +240,9 @@ Private Function NormalizeEndpoint(ByVal e As String) As String
     NormalizeEndpoint = s
 End Function
 
-Private Function ResolveIniString(ByVal value As String, ByVal keyName As String, ByVal fallback As String) As String
+Private Function ResolveIniString(ByVal value As String, ByVal keyName As String, ByVal fallback As String, Optional ByVal sectionName As String = "ai") As String
     Dim settingValue As String
-    settingValue = ReadIniValue("ai", keyName, fallback)
+    settingValue = ReadIniValue(sectionName, keyName, fallback)
     If Len(value) > 0 Then
         ResolveIniString = value
     Else
@@ -189,9 +250,9 @@ Private Function ResolveIniString(ByVal value As String, ByVal keyName As String
     End If
 End Function
 
-Private Function ResolveIniDouble(ByVal keyName As String, ByVal fallback As Double) As Double
+Private Function ResolveIniDouble(ByVal keyName As String, ByVal fallback As Double, Optional ByVal sectionName As String = "ai") As Double
     Dim settingValue As String
-    settingValue = ReadIniValue("ai", keyName, CStr(fallback))
+    settingValue = ReadIniValue(sectionName, keyName, CStr(fallback))
     If Len(settingValue) > 0 Then
         ResolveIniDouble = CDbl(settingValue)
     Else
@@ -199,9 +260,9 @@ Private Function ResolveIniDouble(ByVal keyName As String, ByVal fallback As Dou
     End If
 End Function
 
-Private Function ResolveIniLong(ByVal keyName As String, ByVal fallback As Long) As Long
+Private Function ResolveIniLong(ByVal keyName As String, ByVal fallback As Long, Optional ByVal sectionName As String = "ai") As Long
     Dim settingValue As String
-    settingValue = ReadIniValue("ai", keyName, CStr(fallback))
+    settingValue = ReadIniValue(sectionName, keyName, CStr(fallback))
     If Len(settingValue) > 0 Then
         ResolveIniLong = CLng(settingValue)
     Else
@@ -230,8 +291,24 @@ Private Sub EnsureIniDefaults()
     WriteIniDefault "ai", "api_key", ""
     WriteIniDefault "ai", "temperature", "0.2"
     WriteIniDefault "ai", "max_tokens", "512"
-    WriteIniDefault "ai", "system", ""
+    WriteIniDefault "ai", "system", DefaultSystemPrompt()
+    WriteIniDefault "ai", "initialized", "0"
+
+    WriteIniDefault "search", "model", "sonar-pro"
+    WriteIniDefault "search", "endpoint", "https://api.perplexity.ai"
+    WriteIniDefault "search", "api_key", ""
+    WriteIniDefault "search", "temperature", "0.2"
+    WriteIniDefault "search", "max_tokens", "512"
+    WriteIniDefault "search", "system", DefaultSystemPrompt()
 End Sub
+
+Private Function DefaultSystemPrompt() As String
+    DefaultSystemPrompt = "You are a helpful assistant working inside Microsoft Excel. " & _
+                          "Always return only the most concise, direct answer to the user's question. " & _
+                          "Do not include explanations, context, or extra words. " & _
+                          "Use plain text only (no Markdown). " & _
+                          "If the answer is a single value, output only that value."
+End Function
 
 Private Sub WriteIniDefault(ByVal sectionName As String, ByVal keyName As String, ByVal defaultValue As String)
     Dim existing As String

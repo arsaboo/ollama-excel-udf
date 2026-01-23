@@ -7,7 +7,8 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 ## Formula
 
 ```excel
-=AI(prompt, [model], [temperature], [max_tokens], [system], [endpoint], [api_key])
+=AI(prompt, [model], [temperature], [max_tokens], [endpoint], [api_key])
+=AI_SEARCH(prompt, [model], [temperature], [max_tokens], [endpoint], [api_key])
 ```
 
 ---
@@ -72,7 +73,7 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 ### Change Endpoint
 
 ```excel
-=AI("ping","qwen3:30b-a3b-instruct-2507-q8_0",0.2,128,"","http://192.168.2.50:11434")
+=AI("ping","qwen3:30b-a3b-instruct-2507-q8_0",0.2,128,"http://192.168.2.50:11434")
 ```
 
 *(Host-only is fine; `/v1/chat/completions` is auto-appended.)*
@@ -82,7 +83,13 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 ### Perplexity (API Key)
 
 ```excel
-=AI("Hello!","sonar-pro",0.2,128,"","https://api.perplexity.ai","YOUR_API_KEY")
+=AI("Hello!","sonar-pro",0.2,128,"https://api.perplexity.ai","YOUR_API_KEY")
+```
+
+### Search
+
+```excel
+=AI_SEARCH("latest GDP of Japan","sonar-pro",0.2,256,"https://api.perplexity.ai","YOUR_API_KEY")
 ```
 
 ---
@@ -122,8 +129,6 @@ Use these values for the `model` and `endpoint` arguments (or set them in the AI
 - **`max_tokens`** (optional):
   Default from INI (`ai.max_tokens`), or `512` if missing.
 
-- **`system`** (optional):
-  Default from INI (`ai.system`), or built-in concise system prompt if missing.
 
 - **`endpoint`** (optional):
   Default from INI (`ai.endpoint`), or built-in default if missing.
@@ -146,7 +151,15 @@ endpoint = https://api.perplexity.ai
 api_key = YOUR_API_KEY
 temperature = 0.2
 max_tokens = 512
-system =
+system = You are a helpful assistant working inside Microsoft Excel. Always return only the most concise, direct answer to the user's question. Do not include explanations, context, or extra words. Use plain text only (no Markdown). If the answer is a single value, output only that value.
+
+[search]
+model = sonar-pro
+endpoint = https://api.perplexity.ai
+api_key = YOUR_API_KEY
+temperature = 0.2
+max_tokens = 512
+system = You are a helpful assistant working inside Microsoft Excel. Always return only the most concise, direct answer to the user's question. Do not include explanations, context, or extra words. Use plain text only (no Markdown). If the answer is a single value, output only that value.
 ```
 
 To open the config file via macro:

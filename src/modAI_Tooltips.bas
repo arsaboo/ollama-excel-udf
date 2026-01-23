@@ -14,6 +14,8 @@ Public Sub Install_AI_Tooltips()
     errs = ""
     If Not RegisterOne(ThisWorkbook.Name & "!AI") Then errs = errs & vbCrLf & " - " & ThisWorkbook.Name & "!AI"
     If Not RegisterOne("AI") Then errs = errs & vbCrLf & " - AI"
+    If Not RegisterSearch(ThisWorkbook.Name & "!AI_SEARCH") Then errs = errs & vbCrLf & " - " & ThisWorkbook.Name & "!AI_SEARCH"
+    If Not RegisterSearch("AI_SEARCH") Then errs = errs & vbCrLf & " - AI_SEARCH"
     If Not RegisterVersion(ThisWorkbook.Name & "!AI_Version") Then errs = errs & vbCrLf & " - " & ThisWorkbook.Name & "!AI_Version"
     If Not RegisterVersion("AI_Version") Then errs = errs & vbCrLf & " - AI_Version"
     On Error Resume Next
@@ -45,7 +47,6 @@ Private Function RegisterOne(ByVal macroName As String) As Boolean
             "model (optional): Default from INI (ai.model) or built-in default.", _
             "temperature (optional): Default from INI (ai.temperature) or 0.2.", _
             "max_tokens (optional): Default from INI (ai.max_tokens) or 512.", _
-            "system (optional): Default from INI (ai.system) or built-in system prompt.", _
             "endpoint (optional): Default from INI (ai.endpoint) or built-in default.", _
             "api_key (optional): Default from INI (ai.api_key). Sent as Authorization: Bearer <key>." _
         )
@@ -53,6 +54,26 @@ Private Function RegisterOne(ByVal macroName As String) As Boolean
     Exit Function
 Fail:
     RegisterOne = False
+End Function
+
+Private Function RegisterSearch(ByVal macroName As String) As Boolean
+    On Error GoTo Fail
+    Application.MacroOptions _
+        Macro:=macroName, _
+        Description:="Send a prompt to your search-enabled AI provider and return a short, Excel-friendly answer.", _
+        Category:="AI Helpers", _
+        ArgumentDescriptions:=Array( _
+            "prompt (required): Your question or instruction. Plain text.", _
+            "model (optional): Default from INI (search.model) or built-in default.", _
+            "temperature (optional): Default from INI (search.temperature) or 0.2.", _
+            "max_tokens (optional): Default from INI (search.max_tokens) or 512.", _
+            "endpoint (optional): Default from INI (search.endpoint) or built-in default.", _
+            "api_key (optional): Default from INI (search.api_key). Sent as Authorization: Bearer <key>." _
+        )
+    RegisterSearch = True
+    Exit Function
+Fail:
+    RegisterSearch = False
 End Function
 
 Private Function RegisterVersion(ByVal macroName As String) As Boolean
