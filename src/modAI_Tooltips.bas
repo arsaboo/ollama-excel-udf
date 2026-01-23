@@ -68,7 +68,7 @@ Private Function RegisterSearch(ByVal macroName As String) As Boolean
             "temperature (optional): Default from INI (search.temperature) or 0.2.", _
             "max_tokens (optional): Default from INI (search.max_tokens) or 512.", _
             "endpoint (optional): Default from INI (search.endpoint) or built-in default.", _
-            "api_key (optional): Default from INI (search.api_key). Sent as Authorization: Bearer <key>." _
+            "api_key (optional): Default from INI (search.api_key). Sent as Authorization: Bearer <key> for OpenAI-compatible providers." _
         )
     RegisterSearch = True
     Exit Function

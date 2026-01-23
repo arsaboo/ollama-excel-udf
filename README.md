@@ -151,11 +151,35 @@ endpoint = https://api.perplexity.ai
 api_key = YOUR_API_KEY
 temperature = 0.2
 max_tokens = 512
-system = You are a helpful assistant working inside Microsoft Excel. Always return only the most concise, direct answer to the user's question. Do not include explanations, context, or extra words. Use plain text only (no Markdown). If the answer is a single value, output only that value.
+system = You are a helpful assistant working inside Microsoft Excel. Return only the final answer with no extra words. Do not include explanations, context, or additional sentences. Use plain text only (no Markdown). If the answer is a single value, output only that value and its unit.
 
 [search]
 model = sonar-pro
 endpoint = https://api.perplexity.ai
+api_key = YOUR_API_KEY
+temperature = 0.2
+max_tokens = 512
+system = You are a helpful assistant working inside Microsoft Excel. Return only the final answer with no extra words. Do not include explanations, context, or additional sentences. Use plain text only (no Markdown). If the answer is a single value, output only that value and its unit.
+```
+
+Gemini search example:
+
+```ini
+[search]
+model = gemini-1.5-flash
+endpoint = https://generativelanguage.googleapis.com/v1beta
+api_key = YOUR_API_KEY
+temperature = 0.2
+max_tokens = 512
+system = You are a helpful assistant working inside Microsoft Excel. Return only the final answer with no extra words. Do not include explanations, context, or additional sentences. Use plain text only (no Markdown). If the answer is a single value, output only that value and its unit.
+```
+
+OpenAI Responses API search example (for models like `gpt-5-mini`):
+
+```ini
+[search]
+model = gpt-5-mini
+endpoint = https://api.openai.com
 api_key = YOUR_API_KEY
 temperature = 0.2
 max_tokens = 512
