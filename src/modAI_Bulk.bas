@@ -90,6 +90,7 @@ Public Sub RunBulkFill(ByVal ui As frmAIBulk)
             c = CLng(colIndex)
             headerText = Trim$(CStr(headerRow.Cells(1, c).Value))
             prompt = BuildPrompt(ui.PromptText(), headerText, contextText)
+            ui.UpdateStatus "Running... " & (doneCells + 1) & " of " & totalCells
             If isSearch Then
                 cellValue = AI_SEARCH(prompt)
             Else
@@ -97,12 +98,8 @@ Public Sub RunBulkFill(ByVal ui As frmAIBulk)
             End If
             region.Cells(r, c).Value = cellValue
             doneCells = doneCells + 1
-            ui.UpdateStatus "Filled " & doneCells & " of " & totalCells & " cells."
-            DoEvents
         Next colIndex
     Next r
-
-    ui.UpdateStatus IIf(ui.Cancelled, "Cancelled.", "Done.")
 
 CleanExit:
     Application.Calculation = prevCalc
@@ -178,14 +175,19 @@ End Function
 
 Private Function BuildPrompt(ByVal globalPrompt As String, ByVal headerText As String, ByVal contextText As String) As String
     Dim prompt As String
+    Dim outputRule As String
+
+    outputRule = "Return ONLY the value. No labels, no prefixes, no extra text. " & _
+                 "Just the raw answer (text, word, or number as appropriate)."
 
     prompt = Trim$(globalPrompt)
     If Len(headerText) > 0 Then
-        prompt = prompt & vbCrLf & "Column requirement: " & headerText
+        prompt = prompt & vbCrLf & "Target column: " & headerText
     End If
     If Len(contextText) > 0 Then
-        prompt = prompt & vbCrLf & contextText
+        prompt = prompt & vbCrLf & "Row data:" & vbCrLf & contextText
     End If
+    prompt = prompt & vbCrLf & vbCrLf & outputRule
 
     BuildPrompt = Trim$(prompt)
 End Function

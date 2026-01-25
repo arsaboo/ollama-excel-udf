@@ -1,115 +1,84 @@
 VERSION 5.00
-Begin VB.UserForm frmAIBulk
-   Caption         =   "AI Bulk Fill"
-   ClientHeight    =   5400
-   ClientLeft      =   0
-   ClientTop       =   0
-   ClientWidth     =   7800
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmAIBulk 
+   Caption         =   "AI Agent"
+   ClientHeight    =   4610
+   ClientLeft      =   110
+   ClientTop       =   450
+   ClientWidth     =   7190
+   OleObjectBlob   =   "frmAIBulk.frx":0000
    StartUpPosition =   1  'CenterOwner
-   Begin MSForms.Label lblPrompt
-      Caption         =   "Global prompt"
-      Height          =   255
-      Left            =   180
-      Top             =   180
-      Width           =   7200
-   End
-   Begin MSForms.TextBox txtPrompt
-      Height          =   2100
-      Left            =   180
-      MultiLine       =   -1  'True
-      ScrollBars      =   2  'Vertical
-      Top             =   480
-      Width           =   7200
-   End
-   Begin MSForms.Label lblMode
-      Caption         =   "Mode"
-      Height          =   255
-      Left            =   180
-      Top             =   2820
-      Width           =   600
-   End
-   Begin MSForms.OptionButton optLocal
-      Caption         =   "Local"
-      Height          =   255
-      Left            =   900
-      Top             =   2800
-      Value           =   -1  'True
-      Width           =   900
-   End
-   Begin MSForms.OptionButton optSearch
-      Caption         =   "Search"
-      Height          =   255
-      Left            =   1920
-      Top             =   2800
-      Width           =   1200
-   End
-   Begin MSForms.CommandButton btnRun
-      Caption         =   "Run"
-      Height          =   360
-      Left            =   180
-      Top             =   3360
-      Width           =   1200
-   End
-   Begin MSForms.CommandButton btnCancel
-      Caption         =   "Cancel"
-      Height          =   360
-      Left            =   1500
-      Top             =   3360
-      Width           =   1200
-   End
-   Begin MSForms.CommandButton btnClose
-      Caption         =   "Close"
-      Height          =   360
-      Left            =   2820
-      Top             =   3360
-      Width           =   1200
-   End
-   Begin MSForms.Label lblStatus
-      Caption         =   "Ready. Select a cell in your table before running."
-      Height          =   600
-      Left            =   180
-      Top             =   3900
-      Width           =   7200
-   End
 End
 Attribute VB_Name = "frmAIBulk"
 Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
-Option Explicit
 
+
+Option Explicit
 Public Cancelled As Boolean
+Private mIsRunning As Boolean
 
 Private Sub UserForm_Initialize()
     Cancelled = False
+    mIsRunning = False
+    chkSearch.Value = False
+    btnClose.Caption = "Close"
+    UpdateStatus "Ready. Select a cell in your table before running."
 End Sub
 
 Private Sub btnRun_Click()
+    If mIsRunning Then Exit Sub
     Cancelled = False
-    UpdateStatus "Running..."
-    DoEvents
+    StartRun
     modAI_Bulk.RunBulkFill Me
-End Sub
-
-Private Sub btnCancel_Click()
-    Cancelled = True
-    UpdateStatus "Cancelling..."
+    EndRun
 End Sub
 
 Private Sub btnClose_Click()
-    Me.Hide
-    Unload Me
+    If mIsRunning Then
+        Cancelled = True
+        UpdateStatus "Stopping..."
+    Else
+        Me.Hide
+        Unload Me
+    End If
 End Sub
+
+Public Sub StartRun()
+    mIsRunning = True
+    Cancelled = False
+    btnClose.Caption = "Stop"
+    btnRun.Enabled = False
+    UpdateStatus "Running..."
+    DoEvents
+End Sub
+
+Public Sub EndRun()
+    mIsRunning = False
+    btnClose.Caption = "Close"
+    btnRun.Enabled = True
+    If Cancelled Then
+        UpdateStatus "Cancelled."
+    Else
+        UpdateStatus "Done."
+    End If
+    DoEvents
+End Sub
+
+Public Function IsRunning() As Boolean
+    IsRunning = mIsRunning
+End Function
 
 Public Function PromptText() As String
     PromptText = Trim$(txtPrompt.Text)
 End Function
 
 Public Function IsSearchMode() As Boolean
-    IsSearchMode = CBool(optSearch.Value)
+    IsSearchMode = CBool(chkSearch.Value)
 End Function
 
 Public Sub UpdateStatus(ByVal message As String)
     lblStatus.Caption = message
+    DoEvents
 End Sub
