@@ -35,17 +35,25 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 
 ---
 
-## Quick Install
+## Quick Install (Release)
 
-1. **Locate the add-in file:**
-   Use the provided `OllamaLLM.xlam` file in the `/add-in` folder of this repository.
+1. **Download the add-in file:**
+   Get the latest `OllamaLLM.xlam` from this repo's Releases.
 
-2. **In Excel:**
+2. **Save it to an add-ins folder (recommended):**
+   `%APPDATA%\Microsoft\AddIns\OllamaLLM.xlam`
+
+3. **In Excel:**
    `File → Options → Add-ins → Manage: Excel Add-ins → Go… → Browse…`
-   Pick `OllamaLLM.xlam` from the `/add-in` folder and ensure it’s checked.
+   Select the saved `OllamaLLM.xlam` and ensure it’s checked.
 
-3. **(For Developers Only):**
-   If building from source: enable `Tools → References → Microsoft Scripting Runtime` in the VBA editor.
+**Notes:**
+- You can store the add-in anywhere, but Excel may warn about macros unless the folder is trusted.
+- Releases are built from the `dist/` folder in this repo.
+
+**Macro Security Prompt:**
+- If Excel blocks the add-in, click **Enable Content**.
+- To avoid repeated warnings, add the folder to Excel's **Trusted Locations** (File → Options → Trust Center → Trust Center Settings).
 
 ---
 
@@ -248,7 +256,7 @@ To open the config file via macro:
 
 ---
 
-## Build from Source
+## Build from Source (Developers)
 
 1. In Excel (`Alt+F11`), import files under `/src`:
     - `modAI_Function.bas`
