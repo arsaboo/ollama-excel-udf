@@ -46,28 +46,87 @@ Public Function AI(prompt As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
+    ' Initialize provider defaults if needed
+    InitializeProviderDefaults
 
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
+    ' Use provider settings from modProvider if not explicitly provided
+    If Len(model) > 0 Then
+        resolvedModel = model
+    Else
+        resolvedModel = GetCurrentModel()
+    End If
+    
+    If Len(endpoint) > 0 Then
+        resolvedEndpoint = endpoint
+    Else
+        resolvedEndpoint = GetCurrentEndpoint()
+    End If
+    
+    If Len(api_key) > 0 Then
+        resolvedApiKey = api_key
+    Else
+        resolvedApiKey = GetCurrentApiKey()
+    End If
 
     If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
+        resolvedTemp = GetCurrentTemperature()
     Else
         resolvedTemp = CDbl(temperature)
     End If
 
     If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
+        resolvedTokens = GetCurrentMaxTokens()
     Else
         resolvedTokens = CLng(max_tokens)
     End If
 
-    system = ResolveIniString("", "system", DefaultSystemPrompt())
+    system = GetCurrentSystem()
 
     AI = AI_Core(prompt, system, resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey)
 End Function
+
+' === Helper to resolve provider parameters ===
+Private Sub ResolveProviderParams(ByVal model As String, _
+                                  ByVal temperature As Variant, _
+                                  ByVal max_tokens As Variant, _
+                                  ByVal endpoint As String, _
+                                  ByVal api_key As String, _
+                                  ByRef resolvedModel As String, _
+                                  ByRef resolvedTemp As Double, _
+                                  ByRef resolvedTokens As Long, _
+                                  ByRef resolvedEndpoint As String, _
+                                  ByRef resolvedApiKey As String)
+    
+    If Len(model) > 0 Then
+        resolvedModel = model
+    Else
+        resolvedModel = GetCurrentModel()
+    End If
+    
+    If Len(endpoint) > 0 Then
+        resolvedEndpoint = endpoint
+    Else
+        resolvedEndpoint = GetCurrentEndpoint()
+    End If
+    
+    If Len(api_key) > 0 Then
+        resolvedApiKey = api_key
+    Else
+        resolvedApiKey = GetCurrentApiKey()
+    End If
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        resolvedTemp = GetCurrentTemperature()
+    Else
+        resolvedTemp = CDbl(temperature)
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        resolvedTokens = GetCurrentMaxTokens()
+    Else
+        resolvedTokens = CLng(max_tokens)
+    End If
+End Sub
 
 ' === Core AI function (internal) ===
 ' All AI_* functions call this shared implementation
@@ -142,25 +201,33 @@ Public Function AI_SEARCH(prompt As String, _
     Dim isGemini As Boolean
     Dim isResponses As Boolean
     Dim system As String
+    Dim resolvedTemp As Double
+    Dim resolvedTokens As Long
 
-    EnsureIniDefaults
+    ' Initialize provider defaults if needed
+    InitializeProviderDefaults
 
-    model = ResolveIniString(model, "model", "sonar-pro", "search")
-    endpoint = ResolveIniString(endpoint, "endpoint", "https://api.perplexity.ai", "search")
-    api_key = ResolveIniString(api_key, "api_key", "", "search")
+    ' Use search provider settings from modProvider if not explicitly provided
+    If Len(model) = 0 Then model = GetSearchModel()
+    If Len(endpoint) = 0 Then endpoint = GetSearchEndpoint()
+    If Len(api_key) = 0 Then api_key = GetSearchApiKey()
 
     isGemini = InStr(1, endpoint, "generativelanguage.googleapis.com", vbTextCompare) > 0
     isResponses = IsResponsesModel(model, endpoint)
 
     If IsMissing(temperature) Or IsEmpty(temperature) Then
-        temperature = ResolveIniDouble("temperature", 0.2, "search")
+        resolvedTemp = GetSearchTemperature()
+    Else
+        resolvedTemp = CDbl(temperature)
     End If
 
     If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        max_tokens = ResolveIniLong("max_tokens", 512, "search")
+        resolvedTokens = GetSearchMaxTokens()
+    Else
+        resolvedTokens = CLng(max_tokens)
     End If
 
-    system = ResolveIniString("", "system", DefaultSystemPrompt(), "search")
+    system = GetSearchSystem()
 
     If isGemini Then
         url = NormalizeGeminiEndpoint(endpoint, model, api_key)
@@ -175,9 +242,9 @@ Public Function AI_SEARCH(prompt As String, _
     If isGemini Then
         payload = BuildGeminiPayload(prompt, system)
     ElseIf isResponses Then
-        payload = BuildResponsesPayload(prompt, model, CDbl(temperature), CLng(max_tokens), system)
+        payload = BuildResponsesPayload(prompt, model, resolvedTemp, resolvedTokens, system)
     Else
-        payload = BuildChatPayload(prompt, model, CDbl(temperature), CLng(max_tokens), system)
+        payload = BuildChatPayload(prompt, model, resolvedTemp, resolvedTokens, system)
     End If
 
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
@@ -244,23 +311,9 @@ Public Function AI_EXTRACT(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Extract only the " & field & " from the following text. " & _
                    "Return just the extracted value with no additional text. " & _
@@ -285,23 +338,9 @@ Public Function AI_CLASSIFY(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     categoryList = ParseCategories(categories)
 
@@ -326,23 +365,9 @@ Public Function AI_TRANSLATE(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Translate the following text to " & targetLang & ". " & _
                    "Return only the translation with no explanations or notes."
@@ -365,23 +390,9 @@ Public Function AI_SUMMARIZE(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Summarize the following text in " & maxWords & " words or fewer. " & _
                    "Return only the summary, no preamble or additional text."
@@ -403,23 +414,9 @@ Public Function AI_SENTIMENT(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Analyze the sentiment of the following text. " & _
                    "Return exactly one word: Positive, Negative, or Neutral."
@@ -442,23 +439,9 @@ Public Function AI_FIX(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Fix any grammar, spelling, and formatting issues in the following text. "
     If Len(rules) > 0 Then

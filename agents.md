@@ -1,261 +1,127 @@
-# Claude Code Instructions for Ollama Excel UDF
+# Project Context for Ollama Excel UDF
 
 ## Project Overview
+This is an Excel add-in (UDF - User Defined Function) that integrates with AI providers (Ollama, OpenAI, Perplexity, Gemini) to provide AI capabilities directly within Excel spreadsheets. The add-in provides 8 AI functions for common tasks like extraction, classification, translation, summarization, and sentiment analysis. It also includes a bulk fill UserForm for processing entire tables with AI.
 
-This is a VBA Excel add-in that provides AI functions for Excel spreadsheets. It integrates with Ollama (local), OpenAI, Perplexity, Gemini, and other OpenAI-compatible APIs.
+### Key Technologies
+- **Language**: VBA (Visual Basic for Applications)
+- **Platform**: Excel for Windows
+- **API Integration**: OpenAI-compatible `/v1/chat/completions` endpoint, Gemini API, OpenAI Responses API
+- **Dependencies**: 
+  - WinHTTP for HTTP requests
+  - Microsoft Scripting Runtime for Dictionary objects
+  - VBA-JSON library for JSON parsing
 
-## Critical: VBA File Requirements
-
-### Line Endings
-
-**All VBA files MUST use Windows-style CRLF line endings.**
-
-| File Type | Extension | Line Ending | Notes |
-|-----------|-----------|-------------|-------|
-| Module | `.bas` | CRLF | Standard VBA module |
-| Form | `.frm` | CRLF | **Critical** - mixed endings will prevent import |
-| Class | `.cls` | CRLF | Class module |
-
-After editing any VBA file, verify line endings:
-```bash
-file src/filename.bas
-# Should show: "ASCII text, with CRLF line terminators"
-```
-
-If mixed or LF-only, convert:
-```bash
-unix2dos src/filename.bas
-```
-
-### Form Files (.frm)
-
-Form files have two parts:
-1. `.frm` - Text file with form header + VBA code
-2. `.frx` - Binary file with visual control definitions
-
-**You cannot edit `.frx` files programmatically.** Visual controls (buttons, checkboxes, textboxes) must be added manually in the VBA editor.
-
-When adding new form controls:
-1. Document the control properties in code comments
-2. Add the control reference in `UserForm_Initialize`
-3. Instruct user to manually add the control in VBA editor
-
-Example:
-```vba
-' Requires control: chkPromptRow (CheckBox)
-' - Name: chkPromptRow
-' - Caption: "Row 1 contains column-specific prompts"
-Private Sub UserForm_Initialize()
-    chkPromptRow.Value = False  ' Will error if control not added
-End Sub
-```
+### Architecture
+The project consists of:
+1. `modAI_Function.bas` - Contains all AI UDF implementations (AI, AI_SEARCH, AI_EXTRACT, AI_CLASSIFY, AI_TRANSLATE, AI_SUMMARIZE, AI_SENTIMENT, AI_FIX)
+2. `modAI_Tooltips.bas` - Handles function tooltips and IntelliSense registration
+3. `modAI_Bulk.bas` - Runs bulk fill logic for header-aware tables with per-column prompt support
+4. `frmAIBulk.frm` - UserForm for bulk fill operations
+5. `JsonConverter.bas` - Third-party JSON parsing library
+6. `OllamaLLM.xlam` - Compiled Excel add-in file
 
 ## Project Structure
-
 ```
 ollama-excel-udf/
 ├── add-in/
-│   └── OllamaLLM.xlam          # Compiled add-in (binary, do not edit)
+│   └── OllamaLLM.xlam          # Compiled Excel add-in
+├── dev-workbook/
+│   └── README.md               # Instructions for development workbook
 ├── src/
-│   ├── JsonConverter.bas       # Third-party JSON library (do not modify)
-│   ├── modAI_Function.bas      # All AI UDF implementations
-│   ├── modAI_Tooltips.bas      # Function registration and IntelliSense
+│   ├── JsonConverter.bas       # JSON parsing library (VBA-JSON)
+│   ├── modAI_Function.bas      # All AI function implementations
+│   ├── modAI_Tooltips.bas      # Function tooltips and registration
 │   ├── modAI_Bulk.bas          # Bulk fill macro logic
-│   └── frmAIBulk.frm           # UserForm code (needs .frx for controls)
-├── assets/                     # Demo GIFs and images
-├── README.md                   # User documentation
-├── AGENTS.md                   # Project context for AI agents
-├── BUILD_INSTRUCTIONS.md       # How to build the add-in
-└── CLAUDE.md                   # This file
+│   └── frmAIBulk.frm           # UserForm module
+├── assets/                     # GIF demos and images
+├── BUILD_INSTRUCTIONS.md       # Detailed build instructions
+├── README.md                   # User-facing documentation
+├── LICENSE                     # MIT License
+├── .gitignore                  # Git ignore rules
+└── AGENTS.md                   # This file
 ```
 
-## Key Files
+## Available Functions
 
-### modAI_Function.bas
+### Core Functions
+| Function | Purpose |
+|----------|---------|
+| `AI()` | General-purpose AI prompt |
+| `AI_SEARCH()` | AI with web search (Perplexity/Gemini) |
 
-Contains all public AI functions:
+### Specialized Functions
+| Function | Purpose |
+|----------|---------|
+| `AI_EXTRACT(text, field)` | Extract specific data (email, phone, date, etc.) |
+| `AI_CLASSIFY(text, categories)` | Classify into categories (string or range) |
+| `AI_TRANSLATE(text, targetLang)` | Translate to any language |
+| `AI_SUMMARIZE(text, [maxWords])` | Summarize to word count (default: 50) |
+| `AI_SENTIMENT(text)` | Returns: Positive, Negative, or Neutral |
+| `AI_FIX(text, [rules])` | Fix grammar, spelling, formatting |
 
-| Function | Signature |
-|----------|-----------|
-| `AI` | `(prompt, [model], [temp], [max_tokens], [endpoint], [api_key])` |
-| `AI_SEARCH` | Same as AI, uses `[search]` INI section |
-| `AI_EXTRACT` | `(text, field, ...)` |
-| `AI_CLASSIFY` | `(text, categories, ...)` - categories can be String or Range |
-| `AI_TRANSLATE` | `(text, targetLang, ...)` |
-| `AI_SUMMARIZE` | `(text, [maxWords], ...)` - default 50 words |
-| `AI_SENTIMENT` | `(text, ...)` - returns Positive/Negative/Neutral |
-| `AI_FIX` | `(text, [rules], ...)` |
+## Bulk Fill Features
+- **Standard Mode**: Row 1 = headers, Row 2+ = data
+- **Per-Column Prompt Mode**: Row 1 = custom prompts per column, Row 2 = headers, Row 3+ = data
+- **Hotkey**: `Ctrl+Shift+A` opens the form
+- **Auto-detection**: Input columns (with data) vs output columns (empty with headers)
 
-**Internal functions:**
-- `AI_Core` - Private function that handles HTTP requests, called by all AI_* functions
-- `ParseCategories` - Converts Range or String to comma-separated category list
-- `BuildChatPayload` - Creates OpenAI-compatible JSON payload
-- `BuildGeminiPayload` - Creates Gemini API payload
-- `BuildResponsesPayload` - Creates OpenAI Responses API payload
-
-### modAI_Bulk.bas
-
-Bulk fill logic for processing tables:
-
-**Key functions:**
-- `RunBulkFill(ui As frmAIBulk)` - Main entry point
-- `BuildPrompt(columnPrompt, globalPrompt, headerText, contextText)` - Constructs final prompt
-- `BuildRowContext(headerRow, dataRow, inputCols)` - Gathers input column data
-
-**Modes:**
-1. Standard: Row 1 = headers, Row 2+ = data
-2. Prompt Row: Row 1 = per-column prompts, Row 2 = headers, Row 3+ = data
-
-### modAI_Tooltips.bas
-
-Registers all functions with Excel for IntelliSense:
-
-- Each function needs a `RegisterXxx` private function
-- Called from `Install_AI_Tooltips` on workbook open
-- Uses `Application.MacroOptions` for registration
-
-### frmAIBulk.frm
-
-UserForm for bulk operations:
-
-**Required controls (must exist in .frx):**
-- `txtPrompt` - TextBox for global prompt
-- `chkSearch` - CheckBox for search mode
-- `chkPromptRow` - CheckBox for prompt row mode
-- `btnRun` - CommandButton to start
-- `btnClose` - CommandButton to close/stop
-- `lblStatus` - Label for status messages
-
-**Public methods exposed to modAI_Bulk:**
-- `PromptText() As String`
-- `IsSearchMode() As Boolean`
-- `HasPromptRow() As Boolean`
-- `UpdateStatus(message As String)`
-- `Cancelled As Boolean` (public property)
-
-## Configuration System
-
+## Configuration
 Settings stored in `%APPDATA%\OllamaLLM\config.ini`:
+- `[ai]` section for standard AI functions
+- `[search]` section for AI_SEARCH function
+- Supports: model, endpoint, api_key, temperature, max_tokens, system prompt
 
-```ini
-[ai]
-model = qwen3:30b-a3b-instruct-2507-q8_0
-endpoint = http://localhost:11434
-api_key = 
-temperature = 0.2
-max_tokens = 512
-system = You are a helpful assistant...
+## Supported Providers
+- **Ollama** (local/self-hosted)
+- **OpenAI** (GPT models)
+- **Perplexity** (Sonar models with search)
+- **Google Gemini** (with Google Search)
+- **OpenRouter** (multi-provider gateway)
+- Any OpenAI-compatible API
 
-[search]
-model = sonar-pro
-endpoint = https://api.perplexity.ai
-api_key = YOUR_KEY
-...
-```
+## Development Workflow
+1. **Editing Source Code**: Modify `.bas`/`.frm` files in `src/`
+2. **Building the Add-in**: 
+   - Import files into Excel VBA editor
+   - Enable Microsoft Scripting Runtime reference
+   - Add `chkPromptRow` checkbox to `frmAIBulk` form
+   - Save as `.xlam` in `add-in/`
+3. **Testing**: Install add-in and test all 8 functions + bulk fill modes
 
-**INI functions in modAI_Function.bas:**
-- `GetIniPath()` - Returns config file path
-- `ReadIniValue(section, key, default)` - Reads value
-- `WriteIniDefault(section, key, value)` - Writes if not exists
-- `EnsureIniDefaults()` - Creates default config on first run
-- `ResolveIniString/Double/Long()` - Gets value with fallback
+## Key Implementation Details
 
-## Adding New Functions
+### AI_Core Function
+All AI functions call the private `AI_Core()` function which handles:
+- HTTP request setup (WinHTTP)
+- Payload building (JSON)
+- Response parsing
+- Error handling
 
-### 1. Add the UDF to modAI_Function.bas
+### ParseCategories Helper
+`AI_CLASSIFY` accepts both:
+- Comma-separated string: `"Tech, Sports, Politics"`
+- Cell range: `$A$1:$A$10`
 
-```vba
-Public Function AI_NEWFUNCTION(text As String, _
-                               Optional param As String = "", _
-                               Optional model As String = "", _
-                               Optional temperature As Variant, _
-                               Optional max_tokens As Variant, _
-                               Optional endpoint As String = "", _
-                               Optional api_key As String = "") As String
-    Dim systemPrompt As String
-    Dim resolvedModel As String
-    ' ... resolve parameters from INI ...
-    
-    systemPrompt = "Your instruction here. " & param
-    
-    AI_NEWFUNCTION = AI_Core(text, systemPrompt, resolvedModel, ...)
-End Function
-```
+The `ParseCategories()` function handles both input types.
 
-### 2. Add tooltip registration to modAI_Tooltips.bas
+### Bulk Fill Prompt Resolution
+For each output cell:
+1. Check if column has a prompt in Row 1 (when prompt row mode enabled)
+2. If yes, use column-specific prompt
+3. If no, fall back to global prompt from form
+4. Append header name and row context
 
-```vba
-Private Function RegisterNewFunction(ByVal macroName As String) As Boolean
-    On Error GoTo Fail
-    Application.MacroOptions _
-        Macro:=macroName, _
-        Description:="Description for function wizard.", _
-        Category:="AI Helpers", _
-        ArgumentDescriptions:=Array( _
-            "text (required): The input text.", _
-            "param (optional): Additional parameter." _
-        )
-    RegisterNewFunction = True
-    Exit Function
-Fail:
-    RegisterNewFunction = False
-End Function
-```
+## Requirements
+- Excel for Windows (uses WinHTTP)
+- For local use: Ollama server with model pulled
+- For cloud use: API key for respective provider
 
-### 3. Register in Install_AI_Tooltips
+## Security Notes
+- Local models (Ollama): Data never leaves machine
+- Cloud providers: Data sent to provider API
+- No telemetry in add-in
+- Consider signing add-in to reduce macro warnings
 
-```vba
-If Not RegisterNewFunction(ThisWorkbook.Name & "!AI_NEWFUNCTION") Then errs = errs & ...
-If Not RegisterNewFunction("AI_NEWFUNCTION") Then errs = errs & ...
-```
-
-## Testing Checklist
-
-After making changes:
-
-1. [ ] Verify CRLF line endings on all modified .bas/.frm files
-2. [ ] Import files into Excel VBA editor
-3. [ ] Enable Microsoft Scripting Runtime reference
-4. [ ] Test each modified function in a cell
-5. [ ] Test bulk fill in both modes (standard and prompt row)
-6. [ ] Verify tooltips appear in function wizard
-
-## Common Issues
-
-### "Can't import form" or form imports as module
-- **Cause**: Mixed or LF-only line endings
-- **Fix**: Convert to CRLF with `unix2dos`
-
-### "Variable not defined" for form controls
-- **Cause**: Control not added to form designer
-- **Fix**: User must manually add control in VBA editor
-
-### "Compile error: User-defined type not defined"
-- **Cause**: Missing Microsoft Scripting Runtime reference
-- **Fix**: Tools → References → Enable "Microsoft Scripting Runtime"
-
-### Function not appearing in Excel
-- **Cause**: Tooltips not registered
-- **Fix**: Run `Install_AI_Tooltips` or reload add-in
-
-## API Endpoints
-
-The add-in supports multiple API formats:
-
-| Provider | Endpoint Format | Payload Builder |
-|----------|-----------------|-----------------|
-| Ollama/OpenAI | `/v1/chat/completions` | `BuildChatPayload` |
-| Perplexity | `/chat/completions` | `BuildChatPayload` |
-| Gemini | `/models/{model}:generateContent` | `BuildGeminiPayload` |
-| OpenAI Responses | `/v1/responses` | `BuildResponsesPayload` |
-
-Endpoint normalization happens in:
-- `NormalizeEndpoint()` - Standard OpenAI format
-- `NormalizeGeminiEndpoint()` - Gemini format with API key in URL
-- `NormalizeResponsesEndpoint()` - OpenAI Responses API
-
-## Dependencies
-
-- **WinHTTP** - Built into Windows, used for HTTP requests
-- **Microsoft Scripting Runtime** - For `Scripting.Dictionary` objects
-- **VBA-JSON** - JsonConverter.bas for JSON parsing (do not modify)
+## License
+MIT License - see LICENSE file for details
