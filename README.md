@@ -70,6 +70,44 @@ An Excel add-in (`.xlam`) that calls a local/remote Ollama server using the Open
 
 ---
 
+## Bulk Fill (UserForm)
+
+Use the UserForm to fill a table without writing formulas in every cell.
+
+1. Select any cell inside your table (headers in row 1).
+2. Run the macro `Show_AI_Form` (Alt+F8).
+3. Enter a global prompt and click **Run**.
+
+Hotkey: `Ctrl+Shift+A` opens the form after the add-in loads.
+
+The tool uses column headers as requirements for each output column and uses the left-side input columns as row context.
+
+Prompt examples (global prompt):
+
+```text
+Translate the product titles. Keep brand names intact.
+```
+
+```text
+Write concise answers using only the data in the row.
+```
+
+```text
+Extract the value requested by each column header.
+```
+
+Example headers:
+
+```text
+German | French | Japanese
+```
+
+```text
+Age | Location | Summary
+```
+
+---
+
 ### Change Endpoint
 
 ```excel
@@ -213,8 +251,10 @@ To open the config file via macro:
 ## Build from Source
 
 1. In Excel (`Alt+F11`), import files under `/src`:
-    - `modAI_Functions.bas`
+    - `modAI_Function.bas`
     - `modAI_Tooltips.bas`
+    - `modAI_Bulk.bas`
+    - `frmAIBulk.frm`
     - `JsonConverter.bas` (from [VBA-JSON](https://github.com/VBA-tools/VBA-JSON))
 2. Enable **Microsoft Scripting Runtime** in VBA editor.
 3. Save as `.xlam` under `/add-in/OllamaLLM.xlam`.

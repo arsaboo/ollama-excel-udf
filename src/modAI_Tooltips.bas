@@ -1,3 +1,4 @@
+Attribute VB_Name = "modAI_Tooltips"
 Option Explicit
 
 ' Call this from ThisWorkbook.Workbook_Open
@@ -20,6 +21,7 @@ Public Sub Install_AI_Tooltips()
     If Not RegisterVersion("AI_Version") Then errs = errs & vbCrLf & " - AI_Version"
     On Error Resume Next
     Application.Run ThisWorkbook.Name & "!AI_Notify_First_Run"
+    Application.Run ThisWorkbook.Name & "!Register_AI_Hotkey"
     On Error GoTo 0
 
     On Error Resume Next
@@ -87,6 +89,5 @@ Private Function RegisterVersion(ByVal macroName As String) As Boolean
 Fail:
     RegisterVersion = False
 End Function
-
 
 
