@@ -39,6 +39,45 @@ Public Function AI(prompt As String, _
                    Optional max_tokens As Variant, _
                    Optional endpoint As String = "", _
                    Optional api_key As String = "") As String
+    Dim system As String
+    Dim resolvedModel As String
+    Dim resolvedEndpoint As String
+    Dim resolvedApiKey As String
+    Dim resolvedTemp As Double
+    Dim resolvedTokens As Long
+
+    EnsureIniDefaults
+
+    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
+    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
+    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        resolvedTemp = ResolveIniDouble("temperature", 0.2)
+    Else
+        resolvedTemp = CDbl(temperature)
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        resolvedTokens = ResolveIniLong("max_tokens", 512)
+    Else
+        resolvedTokens = CLng(max_tokens)
+    End If
+
+    system = ResolveIniString("", "system", DefaultSystemPrompt())
+
+    AI = AI_Core(prompt, system, resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey)
+End Function
+
+' === Core AI function (internal) ===
+' All AI_* functions call this shared implementation
+Private Function AI_Core(prompt As String, _
+                         systemPrompt As String, _
+                         model As String, _
+                         temperature As Double, _
+                         max_tokens As Long, _
+                         endpoint As String, _
+                         api_key As String) As String
     Dim http As Object
     Dim status As Long
     Dim body As String
@@ -46,29 +85,12 @@ Public Function AI(prompt As String, _
     Dim json As Object
     Dim content As String
     Dim url As String
-    Dim system As String
-
-    EnsureIniDefaults
-
-    model = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    endpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    api_key = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        temperature = ResolveIniDouble("temperature", 0.2)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        max_tokens = ResolveIniLong("max_tokens", 512)
-    End If
-
-    system = ResolveIniString("", "system", DefaultSystemPrompt())
 
     url = NormalizeEndpoint(endpoint)
 
     On Error GoTo FailSoft
 
-    payload = BuildChatPayload(prompt, model, CDbl(temperature), CLng(max_tokens), system)
+    payload = BuildChatPayload(prompt, model, temperature, max_tokens, systemPrompt)
 
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
     http.SetTimeouts 30000, 30000, 30000, 120000
@@ -84,7 +106,7 @@ Public Function AI(prompt As String, _
     body = http.responseText
 
     If status <> 200 Then
-        AI = "Error: HTTP " & status & " - " & http.StatusText & ". Body: " & Left$(body, 500)
+        AI_Core = "Error: HTTP " & status & " - " & http.StatusText & ". Body: " & Left$(body, 500)
         Exit Function
     End If
 
@@ -94,14 +116,14 @@ Public Function AI(prompt As String, _
     On Error GoTo FailSoft
 
     If Len(content) = 0 Then
-        AI = "Error: Missing content in response. Raw: " & Left$(body, 500)
+        AI_Core = "Error: Missing content in response. Raw: " & Left$(body, 500)
     Else
-        AI = Trim(content)
+        AI_Core = Trim(content)
     End If
     Exit Function
 
 FailSoft:
-    AI = "VBA Error #" & Err.Number & ": " & Err.Description
+    AI_Core = "VBA Error #" & Err.Number & ": " & Err.Description
 End Function
 
 Public Function AI_SEARCH(prompt As String, _
@@ -204,7 +226,272 @@ FailSoft:
 End Function
 
 Public Function AI_Version() As String
-    AI_Version = "2026-01-23.1"
+    AI_Version = "2026-01-25.1"
+End Function
+
+' === AI_EXTRACT: Extract a specific field from text ===
+Public Function AI_EXTRACT(text As String, _
+                           field As String, _
+                           Optional model As String = "", _
+                           Optional temperature As Variant, _
+                           Optional max_tokens As Variant, _
+                           Optional endpoint As String = "", _
+                           Optional api_key As String = "") As String
+    Dim systemPrompt As String
+    Dim resolvedModel As String
+    Dim resolvedEndpoint As String
+    Dim resolvedApiKey As String
+    Dim resolvedTemp As Double
+    Dim resolvedTokens As Long
+
+    EnsureIniDefaults
+
+    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
+    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
+    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        resolvedTemp = ResolveIniDouble("temperature", 0.2)
+    Else
+        resolvedTemp = CDbl(temperature)
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        resolvedTokens = ResolveIniLong("max_tokens", 512)
+    Else
+        resolvedTokens = CLng(max_tokens)
+    End If
+
+    systemPrompt = "Extract only the " & field & " from the following text. " & _
+                   "Return just the extracted value with no additional text. " & _
+                   "If the field cannot be found, return empty."
+
+    AI_EXTRACT = AI_Core(text, systemPrompt, resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey)
+End Function
+
+' === AI_CLASSIFY: Classify text into one of the provided categories ===
+Public Function AI_CLASSIFY(text As String, _
+                            categories As Variant, _
+                            Optional model As String = "", _
+                            Optional temperature As Variant, _
+                            Optional max_tokens As Variant, _
+                            Optional endpoint As String = "", _
+                            Optional api_key As String = "") As String
+    Dim systemPrompt As String
+    Dim categoryList As String
+    Dim resolvedModel As String
+    Dim resolvedEndpoint As String
+    Dim resolvedApiKey As String
+    Dim resolvedTemp As Double
+    Dim resolvedTokens As Long
+
+    EnsureIniDefaults
+
+    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
+    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
+    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        resolvedTemp = ResolveIniDouble("temperature", 0.2)
+    Else
+        resolvedTemp = CDbl(temperature)
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        resolvedTokens = ResolveIniLong("max_tokens", 512)
+    Else
+        resolvedTokens = CLng(max_tokens)
+    End If
+
+    categoryList = ParseCategories(categories)
+
+    systemPrompt = "Classify the following text into exactly one of these categories: " & categoryList & ". " & _
+                   "Return only the category name, nothing else."
+
+    AI_CLASSIFY = AI_Core(text, systemPrompt, resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey)
+End Function
+
+' === AI_TRANSLATE: Translate text to target language ===
+Public Function AI_TRANSLATE(text As String, _
+                             targetLang As String, _
+                             Optional model As String = "", _
+                             Optional temperature As Variant, _
+                             Optional max_tokens As Variant, _
+                             Optional endpoint As String = "", _
+                             Optional api_key As String = "") As String
+    Dim systemPrompt As String
+    Dim resolvedModel As String
+    Dim resolvedEndpoint As String
+    Dim resolvedApiKey As String
+    Dim resolvedTemp As Double
+    Dim resolvedTokens As Long
+
+    EnsureIniDefaults
+
+    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
+    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
+    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        resolvedTemp = ResolveIniDouble("temperature", 0.2)
+    Else
+        resolvedTemp = CDbl(temperature)
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        resolvedTokens = ResolveIniLong("max_tokens", 512)
+    Else
+        resolvedTokens = CLng(max_tokens)
+    End If
+
+    systemPrompt = "Translate the following text to " & targetLang & ". " & _
+                   "Return only the translation with no explanations or notes."
+
+    AI_TRANSLATE = AI_Core(text, systemPrompt, resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey)
+End Function
+
+' === AI_SUMMARIZE: Summarize text to specified word count ===
+Public Function AI_SUMMARIZE(text As String, _
+                             Optional maxWords As Long = 50, _
+                             Optional model As String = "", _
+                             Optional temperature As Variant, _
+                             Optional max_tokens As Variant, _
+                             Optional endpoint As String = "", _
+                             Optional api_key As String = "") As String
+    Dim systemPrompt As String
+    Dim resolvedModel As String
+    Dim resolvedEndpoint As String
+    Dim resolvedApiKey As String
+    Dim resolvedTemp As Double
+    Dim resolvedTokens As Long
+
+    EnsureIniDefaults
+
+    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
+    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
+    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        resolvedTemp = ResolveIniDouble("temperature", 0.2)
+    Else
+        resolvedTemp = CDbl(temperature)
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        resolvedTokens = ResolveIniLong("max_tokens", 512)
+    Else
+        resolvedTokens = CLng(max_tokens)
+    End If
+
+    systemPrompt = "Summarize the following text in " & maxWords & " words or fewer. " & _
+                   "Return only the summary, no preamble or additional text."
+
+    AI_SUMMARIZE = AI_Core(text, systemPrompt, resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey)
+End Function
+
+' === AI_SENTIMENT: Analyze sentiment of text ===
+Public Function AI_SENTIMENT(text As String, _
+                             Optional model As String = "", _
+                             Optional temperature As Variant, _
+                             Optional max_tokens As Variant, _
+                             Optional endpoint As String = "", _
+                             Optional api_key As String = "") As String
+    Dim systemPrompt As String
+    Dim resolvedModel As String
+    Dim resolvedEndpoint As String
+    Dim resolvedApiKey As String
+    Dim resolvedTemp As Double
+    Dim resolvedTokens As Long
+
+    EnsureIniDefaults
+
+    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
+    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
+    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        resolvedTemp = ResolveIniDouble("temperature", 0.2)
+    Else
+        resolvedTemp = CDbl(temperature)
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        resolvedTokens = ResolveIniLong("max_tokens", 512)
+    Else
+        resolvedTokens = CLng(max_tokens)
+    End If
+
+    systemPrompt = "Analyze the sentiment of the following text. " & _
+                   "Return exactly one word: Positive, Negative, or Neutral."
+
+    AI_SENTIMENT = AI_Core(text, systemPrompt, resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey)
+End Function
+
+' === AI_FIX: Fix grammar, spelling, and formatting ===
+Public Function AI_FIX(text As String, _
+                       Optional rules As String = "", _
+                       Optional model As String = "", _
+                       Optional temperature As Variant, _
+                       Optional max_tokens As Variant, _
+                       Optional endpoint As String = "", _
+                       Optional api_key As String = "") As String
+    Dim systemPrompt As String
+    Dim resolvedModel As String
+    Dim resolvedEndpoint As String
+    Dim resolvedApiKey As String
+    Dim resolvedTemp As Double
+    Dim resolvedTokens As Long
+
+    EnsureIniDefaults
+
+    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
+    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
+    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        resolvedTemp = ResolveIniDouble("temperature", 0.2)
+    Else
+        resolvedTemp = CDbl(temperature)
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        resolvedTokens = ResolveIniLong("max_tokens", 512)
+    Else
+        resolvedTokens = CLng(max_tokens)
+    End If
+
+    systemPrompt = "Fix any grammar, spelling, and formatting issues in the following text. "
+    If Len(rules) > 0 Then
+        systemPrompt = systemPrompt & "Apply these additional rules: " & rules & ". "
+    End If
+    systemPrompt = systemPrompt & "Return only the corrected text."
+
+    AI_FIX = AI_Core(text, systemPrompt, resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey)
+End Function
+
+' === Helper: Parse categories from string or range ===
+Private Function ParseCategories(categories As Variant) As String
+    Dim result As String
+    Dim cell As Range
+    Dim cellValue As String
+
+    result = ""
+
+    If TypeName(categories) = "Range" Then
+        ' Range: iterate cells and join with commas
+        For Each cell In categories
+            cellValue = Trim$(CStr(cell.Value))
+            If Len(cellValue) > 0 Then
+                If Len(result) > 0 Then result = result & ", "
+                result = result & cellValue
+            End If
+        Next cell
+    Else
+        ' String: use as-is
+        result = CStr(categories)
+    End If
+
+    ParseCategories = result
 End Function
 
 ' Build OpenAI-compatible payload (uses strongly-typed Dictionary for VBA-JSON)

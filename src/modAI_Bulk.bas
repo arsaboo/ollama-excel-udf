@@ -15,6 +15,7 @@ End Sub
 
 Public Sub RunBulkFill(ByVal ui As frmAIBulk)
     Dim region As Range
+    Dim promptRow As Range
     Dim headerRow As Range
     Dim dataRange As Range
     Dim rowCount As Long
@@ -25,12 +26,15 @@ Public Sub RunBulkFill(ByVal ui As frmAIBulk)
     Dim c As Long
     Dim colIndex As Variant
     Dim prompt As String
+    Dim columnPrompt As String
     Dim headerText As String
     Dim contextText As String
     Dim cellValue As String
     Dim totalCells As Long
     Dim doneCells As Long
     Dim isSearch As Boolean
+    Dim hasPromptRow As Boolean
+    Dim minRows As Long
     Dim prevCalc As XlCalculation
 
     If Len(ui.PromptText()) = 0 Then
@@ -44,15 +48,38 @@ Public Sub RunBulkFill(ByVal ui As frmAIBulk)
         Exit Sub
     End If
 
-    If region.Rows.Count < 2 Then
-        MsgBox "The selected table needs a header row and at least one data row.", vbExclamation, "AI Bulk Fill"
+    ' Determine mode and minimum rows required
+    hasPromptRow = ui.HasPromptRow()
+    If hasPromptRow Then
+        minRows = 3  ' prompt + header + at least 1 data row
+    Else
+        minRows = 2  ' header + at least 1 data row
+    End If
+
+    If region.Rows.Count < minRows Then
+        If hasPromptRow Then
+            MsgBox "The selected table needs a prompt row, header row, and at least one data row.", _
+                   vbExclamation, "AI Bulk Fill"
+        Else
+            MsgBox "The selected table needs a header row and at least one data row.", _
+                   vbExclamation, "AI Bulk Fill"
+        End If
         Exit Sub
     End If
 
     rowCount = region.Rows.Count
     colCount = region.Columns.Count
-    Set headerRow = region.Rows(1)
-    Set dataRange = region.Offset(1, 0).Resize(rowCount - 1, colCount)
+
+    ' Set row references based on mode
+    If hasPromptRow Then
+        Set promptRow = region.Rows(1)
+        Set headerRow = region.Rows(2)
+        Set dataRange = region.Offset(2, 0).Resize(rowCount - 2, colCount)
+    Else
+        Set promptRow = Nothing
+        Set headerRow = region.Rows(1)
+        Set dataRange = region.Offset(1, 0).Resize(rowCount - 1, colCount)
+    End If
 
     Set inputCols = New Collection
     Set outputCols = New Collection
@@ -72,7 +99,7 @@ Public Sub RunBulkFill(ByVal ui As frmAIBulk)
     End If
 
     isSearch = ui.IsSearchMode()
-    totalCells = (rowCount - 1) * outputCols.Count
+    totalCells = dataRange.Rows.Count * outputCols.Count
     doneCells = 0
 
     prevCalc = Application.Calculation
@@ -82,21 +109,28 @@ Public Sub RunBulkFill(ByVal ui As frmAIBulk)
 
     On Error GoTo CleanFail
 
-    For r = 2 To rowCount
+    For r = 1 To dataRange.Rows.Count
         If ui.Cancelled Then Exit For
-        contextText = BuildRowContext(headerRow, region.Rows(r), inputCols)
+        contextText = BuildRowContext(headerRow, dataRange.Rows(r), inputCols)
         For Each colIndex In outputCols
             If ui.Cancelled Then Exit For
             c = CLng(colIndex)
             headerText = Trim$(CStr(headerRow.Cells(1, c).Value))
-            prompt = BuildPrompt(ui.PromptText(), headerText, contextText)
+            
+            ' Get column-specific prompt if available
+            columnPrompt = ""
+            If Not promptRow Is Nothing Then
+                columnPrompt = Trim$(CStr(promptRow.Cells(1, c).Value))
+            End If
+            
+            prompt = BuildPrompt(columnPrompt, ui.PromptText(), headerText, contextText)
             ui.UpdateStatus "Running... " & (doneCells + 1) & " of " & totalCells
             If isSearch Then
                 cellValue = AI_SEARCH(prompt)
             Else
                 cellValue = AI(prompt)
             End If
-            region.Cells(r, c).Value = cellValue
+            dataRange.Cells(r, c).Value = cellValue
             doneCells = doneCells + 1
         Next colIndex
     Next r
@@ -173,14 +207,25 @@ Private Function BuildRowContext(ByVal headerRow As Range, ByVal dataRow As Rang
     BuildRowContext = result
 End Function
 
-Private Function BuildPrompt(ByVal globalPrompt As String, ByVal headerText As String, ByVal contextText As String) As String
+Private Function BuildPrompt(ByVal columnPrompt As String, _
+                             ByVal globalPrompt As String, _
+                             ByVal headerText As String, _
+                             ByVal contextText As String) As String
     Dim prompt As String
+    Dim basePrompt As String
     Dim outputRule As String
 
     outputRule = "Return ONLY the value. No labels, no prefixes, no extra text. " & _
                  "Just the raw answer (text, word, or number as appropriate)."
 
-    prompt = Trim$(globalPrompt)
+    ' Use column-specific prompt if available, else global
+    If Len(columnPrompt) > 0 Then
+        basePrompt = columnPrompt
+    Else
+        basePrompt = globalPrompt
+    End If
+
+    prompt = Trim$(basePrompt)
     If Len(headerText) > 0 Then
         prompt = prompt & vbCrLf & "Target column: " & headerText
     End If

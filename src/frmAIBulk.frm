@@ -1,7 +1,7 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmAIBulk 
    Caption         =   "AI Agent"
-   ClientHeight    =   4610
+   ClientHeight    =   5210
    ClientLeft      =   110
    ClientTop       =   450
    ClientWidth     =   7190
@@ -23,6 +23,7 @@ Private Sub UserForm_Initialize()
     Cancelled = False
     mIsRunning = False
     chkSearch.Value = False
+    chkPromptRow.Value = False
     btnClose.Caption = "Close"
     UpdateStatus "Ready. Select a cell in your table before running."
 End Sub
@@ -76,6 +77,10 @@ End Function
 
 Public Function IsSearchMode() As Boolean
     IsSearchMode = CBool(chkSearch.Value)
+End Function
+
+Public Function HasPromptRow() As Boolean
+    HasPromptRow = CBool(chkPromptRow.Value)
 End Function
 
 Public Sub UpdateStatus(ByVal message As String)
