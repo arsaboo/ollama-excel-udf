@@ -199,9 +199,9 @@ End Sub
 
 Public Sub OnAbout(control As IRibbonControl)
     MsgBox "AI Tools for Excel" & vbCrLf & vbCrLf & _
+           "Developer: Dr. Alok Saboo" & vbCrLf & _
            "Version: " & AI_Version() & vbCrLf & _
-           "Provides AI functions powered by Ollama, OpenAI, Perplexity, and Gemini." & vbCrLf & vbCrLf & _
-           "MIT License" & vbCrLf & _
-           "JSON parsing via VBA-JSON by Tim Hall", _
+           "AI-powered Excel tools for analysis, extraction, and summarization." & vbCrLf & vbCrLf & _
+           "Credits: MIT License; third-party components", _
            vbInformation, "About AI Tools"
 End Sub
