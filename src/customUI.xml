@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" onLoad="OnRibbonLoad">
+  <ribbon>
+    <tabs>
+      <tab id="tabAITools" label="AI Tools" insertAfterMso="TabData">
+        
+        <!-- Functions Group -->
+        <group id="grpFunctions" label="Functions">
+          <menu id="mnuInsertAI" label="Insert AI" size="large" imageMso="FunctionWizard">
+            <button id="btnInsertAI" label="AI" imageMso="FunctionInsert" onAction="OnInsertAI" screentip="Insert AI formula" supertip="Inserts =AI(&quot;&quot;) at the active cell for general AI prompts." />
+            <button id="btnInsertAISearch" label="AI_SEARCH" imageMso="WebPagePreview" onAction="OnInsertAISearch" screentip="Insert AI_SEARCH formula" supertip="Inserts =AI_SEARCH(&quot;&quot;) for web-enabled AI queries." />
+            <menuSeparator id="sep1" />
+            <button id="btnInsertExtract" label="Extract" imageMso="ExportTextFile" onAction="OnInsertExtract" screentip="Insert AI_EXTRACT formula" supertip="Extract specific fields from text (email, phone, date, etc.)" />
+            <button id="btnInsertClassify" label="Classify" imageMso="CategoryRename" onAction="OnInsertClassify" screentip="Insert AI_CLASSIFY formula" supertip="Classify text into categories." />
+            <button id="btnInsertTranslate" label="Translate" imageMso="TranslateMenu" onAction="OnInsertTranslate" screentip="Insert AI_TRANSLATE formula" supertip="Translate text to another language." />
+            <button id="btnInsertSummarize" label="Summarize" imageMso="OutlineCollapse" onAction="OnInsertSummarize" screentip="Insert AI_SUMMARIZE formula" supertip="Summarize long text to a word count." />
+            <button id="btnInsertSentiment" label="Sentiment" imageMso="HappyFace" onAction="OnInsertSentiment" screentip="Insert AI_SENTIMENT formula" supertip="Analyze text sentiment (Positive/Negative/Neutral)." />
+            <button id="btnInsertFix" label="Fix Grammar" imageMso="SpellingMenu" onAction="OnInsertFix" screentip="Insert AI_FIX formula" supertip="Fix grammar, spelling, and formatting." />
+          </menu>
+        </group>
+
+        <!-- Bulk Fill Group -->
+        <group id="grpBulkFill" label="Bulk Fill">
+          <button id="btnBulkFill" label="Bulk Fill" size="large" imageMso="TableInsert" onAction="OnBulkFill" screentip="AI Bulk Fill (Ctrl+Shift+A)" supertip="Fill empty columns in your table using AI. Select a cell in your table first." />
+        </group>
+
+        <!-- Provider Group -->
+        <group id="grpProvider" label="Provider">
+          <dropDown id="ddProvider" label="Provider" screentip="Select AI Provider" supertip="Choose which AI provider to use for AI functions." getItemCount="GetProviderCount" getItemLabel="GetProviderLabel" getSelectedItemIndex="GetProviderSelectedIndex" onAction="OnProviderChange" />
+          <dropDown id="ddModel" label="Model" screentip="Select Model" supertip="Choose which model to use from the selected provider." getItemCount="GetModelCount" getItemLabel="GetModelLabel" getSelectedItemIndex="GetModelSelectedIndex" onAction="OnModelChange" />
+          <button id="btnConfigureProvider" label="Configure..." imageMso="ServerConnection" onAction="OnConfigureProvider" screentip="Configure Providers" supertip="Add, edit, or remove AI providers and their settings." />
+        </group>
+
+        <!-- Search Group -->
+        <group id="grpSearch" label="Search">
+          <dropDown id="ddSearchProvider" label="Provider" screentip="Select Search Provider" supertip="Choose which AI provider to use for AI_SEARCH function." getItemCount="GetSearchProviderCount" getItemLabel="GetSearchProviderLabel" getSelectedItemIndex="GetSearchProviderSelectedIndex" onAction="OnSearchProviderChange" />
+          <dropDown id="ddSearchModel" label="Model" screentip="Select Search Model" supertip="Choose which model to use for search queries." getItemCount="GetSearchModelCount" getItemLabel="GetSearchModelLabel" getSelectedItemIndex="GetSearchModelSelectedIndex" onAction="OnSearchModelChange" />
+          <button id="btnConfigureSearch" label="Configure..." imageMso="ServerConnection" onAction="OnConfigureSearchProvider" screentip="Configure Search Provider" supertip="Configure the provider used for AI_SEARCH function." />
+        </group>
+
+        <!-- Help Group -->
+        <group id="grpHelp" label="Help">
+          <button id="btnDocumentation" label="Documentation" imageMso="Help" onAction="OnDocumentation" screentip="Open Documentation" supertip="Open the online documentation in your browser." />
+          <button id="btnOpenConfig" label="Config File" imageMso="FileOpen" onAction="OnOpenConfig" screentip="Open Config File" supertip="Open the configuration file in Notepad for advanced editing." />
+          <button id="btnAbout" label="About" imageMso="Info" onAction="OnAbout" screentip="About AI Tools" supertip="View version information and credits." />
+        </group>
+
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

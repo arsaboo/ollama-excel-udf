@@ -46,28 +46,87 @@ Public Function AI(prompt As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
+    ' Initialize provider defaults if needed
+    InitializeProviderDefaults
 
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
+    ' Use provider settings from modProvider if not explicitly provided
+    If Len(model) > 0 Then
+        resolvedModel = model
+    Else
+        resolvedModel = GetCurrentModel()
+    End If
+
+    If Len(endpoint) > 0 Then
+        resolvedEndpoint = endpoint
+    Else
+        resolvedEndpoint = GetCurrentEndpoint()
+    End If
+
+    If Len(api_key) > 0 Then
+        resolvedApiKey = api_key
+    Else
+        resolvedApiKey = GetCurrentApiKey()
+    End If
 
     If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
+        resolvedTemp = GetCurrentTemperature()
     Else
         resolvedTemp = CDbl(temperature)
     End If
 
     If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
+        resolvedTokens = GetCurrentMaxTokens()
     Else
         resolvedTokens = CLng(max_tokens)
     End If
 
-    system = ResolveIniString("", "system", DefaultSystemPrompt())
+    system = GetCurrentSystem()
 
     AI = AI_Core(prompt, system, resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey)
 End Function
+
+' === Helper to resolve provider parameters ===
+Private Sub ResolveProviderParams(ByVal model As String, _
+                                  ByVal temperature As Variant, _
+                                  ByVal max_tokens As Variant, _
+                                  ByVal endpoint As String, _
+                                  ByVal api_key As String, _
+                                  ByRef resolvedModel As String, _
+                                  ByRef resolvedTemp As Double, _
+                                  ByRef resolvedTokens As Long, _
+                                  ByRef resolvedEndpoint As String, _
+                                  ByRef resolvedApiKey As String)
+
+    If Len(model) > 0 Then
+        resolvedModel = model
+    Else
+        resolvedModel = GetCurrentModel()
+    End If
+
+    If Len(endpoint) > 0 Then
+        resolvedEndpoint = endpoint
+    Else
+        resolvedEndpoint = GetCurrentEndpoint()
+    End If
+
+    If Len(api_key) > 0 Then
+        resolvedApiKey = api_key
+    Else
+        resolvedApiKey = GetCurrentApiKey()
+    End If
+
+    If IsMissing(temperature) Or IsEmpty(temperature) Then
+        resolvedTemp = GetCurrentTemperature()
+    Else
+        resolvedTemp = CDbl(temperature)
+    End If
+
+    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
+        resolvedTokens = GetCurrentMaxTokens()
+    Else
+        resolvedTokens = CLng(max_tokens)
+    End If
+End Sub
 
 ' === Core AI function (internal) ===
 ' All AI_* functions call this shared implementation
@@ -85,12 +144,24 @@ Private Function AI_Core(prompt As String, _
     Dim json As Object
     Dim content As String
     Dim url As String
+    Dim startTime As Double
+    Dim durationMs As Long
+    Dim finishReason As String
+    Dim resultStatus As String
 
     url = NormalizeEndpoint(endpoint)
 
     On Error GoTo FailSoft
 
-    payload = BuildChatPayload(prompt, model, temperature, max_tokens, systemPrompt)
+    Dim thinkEnabled As Boolean
+    thinkEnabled = GetCurrentThink()
+    If IsOllamaEndpoint(endpoint) Or IsGptOssModel(model) Then
+    payload = BuildChatPayload(prompt, model, temperature, max_tokens, systemPrompt, thinkEnabled)
+    Else
+        payload = BuildChatPayload(prompt, model, temperature, max_tokens, systemPrompt)
+    End If
+
+    startTime = Timer
 
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
     http.SetTimeouts 30000, 30000, 30000, 120000
@@ -104,26 +175,53 @@ Private Function AI_Core(prompt As String, _
 
     status = http.status
     body = http.responseText
+    durationMs = CLng((Timer - startTime) * 1000)
 
     If status <> 200 Then
-        AI_Core = "Error: HTTP " & status & " - " & http.StatusText & ". Body: " & Left$(body, 500)
+        resultStatus = "Error: HTTP " & status & " - " & http.StatusText
+        AI_Core = resultStatus & ". Body: " & Left$(body, 500)
+        LogAIResponse "AI_Core", model, url, payload, durationMs, status, body, 0, 0, "", resultStatus
         Exit Function
     End If
 
     Set json = JsonConverter.ParseJson(body)
     On Error Resume Next
     content = json("choices")(1)("message")("content")
+    Dim thinkingContent As String
+    thinkingContent = ""
+    thinkingContent = json("choices")(1)("message")("thinking")
+    If Len(thinkingContent) = 0 Then
+        thinkingContent = json("choices")(1)("message")("reasoning")
+    End If
+    finishReason = ""
+    finishReason = json("choices")(1)("finish_reason")
     On Error GoTo FailSoft
 
     If Len(content) = 0 Then
-        AI_Core = "Error: Missing content in response. Raw: " & Left$(body, 500)
+        If LCase$(finishReason) = "length" Then
+            resultStatus = "Error: Token limit reached. " & _
+                           "Increase max_tokens."
+            AI_Core = resultStatus
+        ElseIf Len(thinkingContent) > 0 Then
+            resultStatus = "Error: Model returned thinking trace but no final answer. " & _
+                           "Increase max_tokens or wait for model to complete."
+            AI_Core = resultStatus
+        Else
+            resultStatus = "Error: Missing content in response."
+            AI_Core = resultStatus & " Raw: " & Left$(body, 500)
+        End If
     Else
+        resultStatus = "OK"
         AI_Core = Trim(content)
     End If
+
+    LogAIResponse "AI_Core", model, url, payload, durationMs, status, body, Len(content), Len(thinkingContent), finishReason, resultStatus
     Exit Function
 
 FailSoft:
-    AI_Core = "VBA Error #" & Err.Number & ": " & Err.Description
+    resultStatus = "VBA Error #" & Err.Number & ": " & Err.Description
+    AI_Core = resultStatus
+    LogAIResponse "AI_Core", model, url, payload, durationMs, status, body, Len(content), 0, finishReason, resultStatus
 End Function
 
 Public Function AI_SEARCH(prompt As String, _
@@ -142,32 +240,48 @@ Public Function AI_SEARCH(prompt As String, _
     Dim isGemini As Boolean
     Dim isResponses As Boolean
     Dim system As String
+    Dim resolvedTemp As Double
+    Dim resolvedTokens As Long
+    Dim startTime As Double
+    Dim durationMs As Long
+    Dim finishReason As String
+    Dim resultStatus As String
+    Dim provider As String
 
-    EnsureIniDefaults
+    ' Initialize provider defaults if needed
+    InitializeProviderDefaults
 
-    model = ResolveIniString(model, "model", "sonar-pro", "search")
-    endpoint = ResolveIniString(endpoint, "endpoint", "https://api.perplexity.ai", "search")
-    api_key = ResolveIniString(api_key, "api_key", "", "search")
+    ' Use search provider settings from modProvider if not explicitly provided
+    If Len(model) = 0 Then model = GetSearchModel()
+    If Len(endpoint) = 0 Then endpoint = GetSearchEndpoint()
+    If Len(api_key) = 0 Then api_key = GetSearchApiKey()
 
     isGemini = InStr(1, endpoint, "generativelanguage.googleapis.com", vbTextCompare) > 0
     isResponses = IsResponsesModel(model, endpoint)
 
     If IsMissing(temperature) Or IsEmpty(temperature) Then
-        temperature = ResolveIniDouble("temperature", 0.2, "search")
+        resolvedTemp = GetSearchTemperature()
+    Else
+        resolvedTemp = CDbl(temperature)
     End If
 
     If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        max_tokens = ResolveIniLong("max_tokens", 512, "search")
+        resolvedTokens = GetSearchMaxTokens()
+    Else
+        resolvedTokens = CLng(max_tokens)
     End If
 
-    system = ResolveIniString("", "system", DefaultSystemPrompt(), "search")
+    system = GetSearchSystem()
 
     If isGemini Then
         url = NormalizeGeminiEndpoint(endpoint, model, api_key)
+        provider = "gemini"
     ElseIf isResponses Then
         url = NormalizeResponsesEndpoint(endpoint)
+        provider = "responses"
     Else
         url = NormalizeEndpoint(endpoint)
+        provider = "chat"
     End If
 
     On Error GoTo FailSoft
@@ -175,10 +289,18 @@ Public Function AI_SEARCH(prompt As String, _
     If isGemini Then
         payload = BuildGeminiPayload(prompt, system)
     ElseIf isResponses Then
-        payload = BuildResponsesPayload(prompt, model, CDbl(temperature), CLng(max_tokens), system)
+        payload = BuildResponsesPayload(prompt, model, resolvedTemp, resolvedTokens, system)
     Else
-        payload = BuildChatPayload(prompt, model, CDbl(temperature), CLng(max_tokens), system)
+        Dim thinkEnabled As Boolean
+        thinkEnabled = GetCurrentThink()
+        If IsOllamaEndpoint(endpoint) Then
+            payload = BuildChatPayload(prompt, model, resolvedTemp, resolvedTokens, system, thinkEnabled)
+        Else
+            payload = BuildChatPayload(prompt, model, resolvedTemp, resolvedTokens, system)
+        End If
     End If
+
+    startTime = Timer
 
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
     http.SetTimeouts 30000, 30000, 30000, 120000
@@ -192,9 +314,12 @@ Public Function AI_SEARCH(prompt As String, _
 
     status = http.status
     body = http.responseText
+    durationMs = CLng((Timer - startTime) * 1000)
 
     If status <> 200 Then
-        AI_SEARCH = "Error: HTTP " & status & " - " & http.StatusText & ". Body: " & Left$(body, 500)
+        resultStatus = "Error: HTTP " & status & " - " & http.StatusText
+        AI_SEARCH = resultStatus & ". Body: " & Left$(body, 500)
+        LogAIResponse "AI_SEARCH(" & provider & ")", model, url, payload, durationMs, status, body, 0, 0, "", resultStatus
         Exit Function
     End If
 
@@ -212,17 +337,26 @@ Public Function AI_SEARCH(prompt As String, _
     Else
         content = json("choices")(1)("message")("content")
     End If
+    finishReason = ""
+    If Not isGemini And Not isResponses Then
+        finishReason = json("choices")(1)("finish_reason")
+    End If
     On Error GoTo FailSoft
 
     If Len(content) = 0 Then
-        AI_SEARCH = "Error: Missing content in response. Raw: " & Left$(body, 500)
+        resultStatus = "Error: Missing content in response."
+        AI_SEARCH = resultStatus & " Raw: " & Left$(body, 500)
     Else
+        resultStatus = "OK"
         AI_SEARCH = Trim(content)
     End If
+    LogAIResponse "AI_SEARCH(" & provider & ")", model, url, payload, durationMs, status, body, Len(content), 0, finishReason, resultStatus
     Exit Function
 
 FailSoft:
-    AI_SEARCH = "VBA Error #" & Err.Number & ": " & Err.Description
+    resultStatus = "VBA Error #" & Err.Number & ": " & Err.Description
+    AI_SEARCH = resultStatus
+    LogAIResponse "AI_SEARCH(" & provider & ")", model, url, payload, durationMs, status, body, Len(content), 0, finishReason, resultStatus
 End Function
 
 Public Function AI_Version() As String
@@ -244,23 +378,9 @@ Public Function AI_EXTRACT(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Extract only the " & field & " from the following text. " & _
                    "Return just the extracted value with no additional text. " & _
@@ -285,23 +405,9 @@ Public Function AI_CLASSIFY(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     categoryList = ParseCategories(categories)
 
@@ -326,23 +432,9 @@ Public Function AI_TRANSLATE(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Translate the following text to " & targetLang & ". " & _
                    "Return only the translation with no explanations or notes."
@@ -365,23 +457,9 @@ Public Function AI_SUMMARIZE(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Summarize the following text in " & maxWords & " words or fewer. " & _
                    "Return only the summary, no preamble or additional text."
@@ -403,23 +481,9 @@ Public Function AI_SENTIMENT(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Analyze the sentiment of the following text. " & _
                    "Return exactly one word: Positive, Negative, or Neutral."
@@ -442,23 +506,9 @@ Public Function AI_FIX(text As String, _
     Dim resolvedTemp As Double
     Dim resolvedTokens As Long
 
-    EnsureIniDefaults
-
-    resolvedModel = ResolveIniString(model, "model", "qwen3:30b-a3b-instruct-2507-q8_0")
-    resolvedEndpoint = ResolveIniString(endpoint, "endpoint", "http://192.168.2.162:11434/v1/chat/completions")
-    resolvedApiKey = ResolveIniString(api_key, "api_key", "")
-
-    If IsMissing(temperature) Or IsEmpty(temperature) Then
-        resolvedTemp = ResolveIniDouble("temperature", 0.2)
-    Else
-        resolvedTemp = CDbl(temperature)
-    End If
-
-    If IsMissing(max_tokens) Or IsEmpty(max_tokens) Then
-        resolvedTokens = ResolveIniLong("max_tokens", 512)
-    Else
-        resolvedTokens = CLng(max_tokens)
-    End If
+    InitializeProviderDefaults
+    ResolveProviderParams model, temperature, max_tokens, endpoint, api_key, _
+                          resolvedModel, resolvedTemp, resolvedTokens, resolvedEndpoint, resolvedApiKey
 
     systemPrompt = "Fix any grammar, spelling, and formatting issues in the following text. "
     If Len(rules) > 0 Then
@@ -499,7 +549,8 @@ Private Function BuildChatPayload(prompt As String, _
                                   model As String, _
                                   temperature As Double, _
                                   max_tokens As Long, _
-                                  system As String) As String
+                                  system As String, _
+                                  Optional think As Variant) As String
     Dim root As Scripting.Dictionary
     Dim messages As Collection
     Dim msg As Scripting.Dictionary
@@ -524,6 +575,11 @@ Private Function BuildChatPayload(prompt As String, _
     root.Add "temperature", temperature
     root.Add "max_tokens", max_tokens
     root.Add "stream", False
+    If IsGptOssModel(model) Then
+        root.Add "think", "low"
+    ElseIf Not IsMissing(think) Then
+        root.Add "think", CBool(think)
+    End If
 
     BuildChatPayload = JsonConverter.ConvertToJson(root, Whitespace:=0)
 End Function
@@ -586,6 +642,12 @@ Private Function ResolveIniLong(ByVal keyName As String, ByVal fallback As Long,
     End If
 End Function
 
+Private Function GetCurrentThink() As Boolean
+    Dim settingValue As String
+    settingValue = LCase$(ReadIniValue("ai", "think", "false"))
+    GetCurrentThink = (settingValue = "true" Or settingValue = "1" Or settingValue = "yes")
+End Function
+
 Private Function ReadIniValue(ByVal sectionName As String, ByVal keyName As String, ByVal fallback As String) As String
     Dim buffer As String
     Dim length As Long
@@ -607,6 +669,8 @@ Private Sub EnsureIniDefaults()
     WriteIniDefault "ai", "api_key", ""
     WriteIniDefault "ai", "temperature", "0.2"
     WriteIniDefault "ai", "max_tokens", "512"
+    WriteIniDefault "ai", "think", "false"
+    WriteIniDefault "ai", "debug", "false"
     WriteIniDefault "ai", "system", DefaultSystemPrompt()
     WriteIniDefault "ai", "initialized", "0"
 
@@ -700,6 +764,119 @@ Private Function IsResponsesModel(ByVal model As String, ByVal endpoint As Strin
         IsResponsesModel = True
     Else
         IsResponsesModel = False
+    End If
+End Function
+
+Private Function GetDebugEnabled() As Boolean
+    Dim settingValue As String
+    settingValue = LCase$(ReadIniValue("ai", "debug", "false"))
+    GetDebugEnabled = (settingValue = "true" Or settingValue = "1" Or settingValue = "yes")
+End Function
+
+Private Function GetDebugLogPath() As String
+    GetDebugLogPath = Environ$("APPDATA") & "\OllamaLLM\debug.log"
+End Function
+
+Private Function LogTimestamp() As String
+    LogTimestamp = Format$(Now, "yyyy-mm-dd hh:nn:ss")
+End Function
+
+Private Sub RotateLogIfNeeded()
+    Dim logPath As String
+    Dim fso As Object
+    Dim logFile As Object
+    Dim lastModified As Date
+
+    logPath = GetDebugLogPath()
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    If fso.FileExists(logPath) Then
+        Set logFile = fso.GetFile(logPath)
+        lastModified = logFile.DateLastModified
+        If DateValue(lastModified) < DateValue(Now) Then
+            fso.DeleteFile logPath
+        End If
+    End If
+End Sub
+
+Private Sub LogDebug(ByVal message As String, ByVal forceLog As Boolean)
+    Dim logPath As String
+    Dim fso As Object
+    Dim ts As Object
+
+    If Not forceLog And Not GetDebugEnabled() Then Exit Sub
+
+    On Error Resume Next
+    RotateLogIfNeeded
+    logPath = GetDebugLogPath()
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    EnsureFolderExists Left$(logPath, InStrRev(logPath, "\") - 1)
+    Set ts = fso.OpenTextFile(logPath, 8, True)
+    ts.WriteLine message
+    ts.Close
+    On Error GoTo 0
+End Sub
+
+Private Sub LogAIResponse(ByVal funcName As String, _
+                          ByVal model As String, _
+                          ByVal endpoint As String, _
+                          ByVal payload As String, _
+                          ByVal durationMs As Long, _
+                          ByVal httpStatus As Long, _
+                          ByVal responseBody As String, _
+                          ByVal contentLength As Long, _
+                          ByVal thinkingLength As Long, _
+                          ByVal finishReason As String, _
+                          ByVal resultStatus As String)
+    Dim logMsg As String
+    Dim truncatedResponse As String
+    Dim forceLog As Boolean
+
+    forceLog = (Left$(resultStatus, 5) = "Error" Or Left$(resultStatus, 9) = "VBA Error")
+    If Not forceLog And Not GetDebugEnabled() Then Exit Sub
+
+    If Len(responseBody) > 2000 Then
+        truncatedResponse = Left$(responseBody, 2000) & "... [TRUNCATED]"
+    Else
+        truncatedResponse = responseBody
+    End If
+
+    logMsg = String$(80, "=") & vbCrLf & _
+             "[" & LogTimestamp() & "] " & funcName & vbCrLf & _
+             String$(80, "=") & vbCrLf & _
+             "MODEL: " & model & vbCrLf & _
+             "ENDPOINT: " & endpoint & vbCrLf & _
+             "PAYLOAD:" & vbCrLf & _
+             payload & vbCrLf & _
+             "--- RESPONSE ---" & vbCrLf & _
+             "DURATION: " & durationMs & " ms" & vbCrLf & _
+             "HTTP_STATUS: " & httpStatus & vbCrLf & _
+             "RESPONSE_SIZE: " & Len(responseBody) & " bytes" & vbCrLf & _
+             "FINISH_REASON: " & IIf(Len(finishReason) > 0, finishReason, "MISSING") & vbCrLf & _
+             "CONTENT_LENGTH: " & contentLength & " chars" & vbCrLf & _
+             "THINKING_LENGTH: " & thinkingLength & " chars" & vbCrLf & _
+             "RESULT: " & resultStatus & vbCrLf & _
+             "[RAW RESPONSE]" & vbCrLf & _
+             truncatedResponse
+
+    LogDebug logMsg, forceLog
+End Sub
+
+Private Function IsGptOssModel(ByVal model As String) As Boolean
+    IsGptOssModel = (InStr(1, LCase$(Trim$(model)), "gpt-oss", vbTextCompare) > 0)
+End Function
+
+Private Function IsOllamaEndpoint(ByVal endpoint As String) As Boolean
+    Dim e As String
+    e = LCase$(Trim$(endpoint))
+    If InStr(1, e, "11434", vbTextCompare) > 0 Then
+        IsOllamaEndpoint = True
+    ElseIf InStr(1, e, "ollama", vbTextCompare) > 0 Then
+        IsOllamaEndpoint = True
+    ElseIf InStr(1, e, "/api/chat", vbTextCompare) > 0 Then
+        IsOllamaEndpoint = True
+    Else
+        IsOllamaEndpoint = False
     End If
 End Function
 
